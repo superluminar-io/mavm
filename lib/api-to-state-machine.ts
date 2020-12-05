@@ -15,7 +15,6 @@ export class ApiToStateMachine extends Construct {
 
         // Create a role for API Gateway
         const apiRole = new Role(this, `${id}Role`, {
-            roleName: `${id}Role`,
             assumedBy: new ServicePrincipal('apigateway.amazonaws.com')
         });
         // Grand role permissions to execute api
