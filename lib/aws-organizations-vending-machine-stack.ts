@@ -1,6 +1,6 @@
 import * as cdk from '@aws-cdk/core';
 import {ApiToStateMachine} from "./api-to-state-machine";
-import {StateMachine} from '@aws-cdk/aws-stepfunctions';
+import {StateMachine, StateMachineType} from '@aws-cdk/aws-stepfunctions';
 import * as tasks from '@aws-cdk/aws-stepfunctions-tasks';
 import * as lambda from '@aws-cdk/aws-lambda-nodejs';
 
@@ -22,10 +22,12 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             this,
             'StateMachine',
             {
-                definition: submitJob
+                definition: submitJob,
+                stateMachineType: StateMachineType.EXPRESS,
             }
         )
 
+        this.templateOptions.transforms = ['AWS::Serverless-2016-10-31'];
         // The code that defines your stack goes here
         new ApiToStateMachine(this, "Api", {
             stateMachine: stateMachine
