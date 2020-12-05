@@ -17,8 +17,7 @@ export class ApiToStateMachine extends Construct {
         const apiRole = new Role(this, `${id}Role`, {
             assumedBy: new ServicePrincipal('apigateway.amazonaws.com')
         });
-        // Grand role permissions to execute api
-        props.stateMachine.grantStartExecution(apiRole);
+        props.stateMachine.grant(apiRole, 'states:StartSyncExecution')
 
         new CfnResource(this, 'HttpApi', {
             type: "AWS::Serverless::HttpApi",
