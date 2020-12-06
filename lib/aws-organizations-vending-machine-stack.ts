@@ -1,22 +1,40 @@
 import * as cdk from '@aws-cdk/core';
-import {ApiToStateMachine} from "./api-to-state-machine";
+import {CfnResource} from '@aws-cdk/core';
 import {StateMachine, StateMachineType} from '@aws-cdk/aws-stepfunctions';
 import * as tasks from '@aws-cdk/aws-stepfunctions-tasks';
 import * as lambda from '@aws-cdk/aws-lambda-nodejs';
-import {Role, ServicePrincipal} from "@aws-cdk/aws-iam";
-import {CfnResource} from "@aws-cdk/core";
+import * as cws from '@aws-cdk/aws-synthetics';
+import {PolicyStatement, Role, ServicePrincipal} from "@aws-cdk/aws-iam";
+import * as path from "path";
+import * as fs from "fs";
 
 export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
     constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
         super(scope, id, props);
 
-        let submitLambda = new lambda.NodejsFunction(this, 'SubmitLambda', {
-            entry: 'code/hello.ts'
-        });
+        const canary = new cws.Canary(this, 'CreateAccount', {
+            runtime: new cws.Runtime('syn-nodejs-2.2'),
+            test: cws.Test.custom({
+                code: cws.Code.fromInline(fs.readFileSync(path.join(__dirname, '../code/create.js'), {encoding: "utf-8"})),
+                handler: 'index.handler',
+            }),
+            startAfterCreation: false,
+        })
 
-        const submitJob = new tasks.LambdaInvoke(this, 'Submit Job', {
-            lambdaFunction: submitLambda,
-            // Lambda's result is in the attribute `Payload`
+        let triggerAccountCreationFunction = new lambda.NodejsFunction(this, 'SubmitLambda', {
+            entry: 'code/start-canary.ts',
+            environment: {
+                CANARY_NAME: canary.canaryName
+            }
+        });
+        triggerAccountCreationFunction.addToRolePolicy(new PolicyStatement(
+            {
+                resources: ['*'],
+                actions: ['synthetics:StartCanary'],
+            }
+        ))
+        const createAccountStep = new tasks.LambdaInvoke(this, 'Submit Job', {
+            lambdaFunction: triggerAccountCreationFunction,
             outputPath: '$.Payload',
         });
 
@@ -24,7 +42,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             this,
             'StateMachine',
             {
-                definition: submitJob,
+                definition: createAccountStep,
                 stateMachineType: StateMachineType.EXPRESS,
             }
         )
