@@ -3,6 +3,9 @@
     "@types/node": "^14.14.10"
   },
   "dependencies": {
-    "aws-sdk": "^2.804.0"
-  }
+    "@types/puppeteer-core": "^2.0.0",
+    "aws-sdk": "^2.804.0",
+    "chrome-aws-lambda": "^5.2.0"
+  },
+  "name": "code"
 }
