@@ -19,7 +19,14 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 handler: 'index.handler',
             }),
             startAfterCreation: false,
-        })
+        });
+
+        canary.role.addToPrincipalPolicy(new PolicyStatement(
+            {
+                resources: ['*'],
+                actions: ['secretsmanager:GetSecretValue'],
+            }
+        ));
 
         let triggerAccountCreationFunction = new lambda.NodejsFunction(this, 'SubmitLambda', {
             entry: 'code/start-canary.ts',
