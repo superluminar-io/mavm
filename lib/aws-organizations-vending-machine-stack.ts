@@ -64,7 +64,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             },
             table: table,
             inputPath: '$.genId.Payload',
-            resultPath: 'DISCARD', // see https://github.com/aws/aws-cdk/issues/1805
+            resultPath: 'DISCARD',
         });
 
         const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
@@ -73,6 +73,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         const submitAccountStep = new tasks.SqsSendMessage(this, 'SubmitAccountStep', {
             messageBody: sfn.TaskInput.fromDataAt('$.genId.Payload'),
             queue: accountCreationQueue,
+            resultPath: 'DISCARD',
         });
 
         const stateMachine = new sfn.StateMachine(
