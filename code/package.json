@@ -1,5 +1,6 @@
 {
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.66",
     "@types/node": "^14.14.10",
     "Synthetics": "npm:@sixleaveakkm/aws-synthetics-local@0.2.1",
     "SyntheticsLogger": "npm:@sixleaveakkm/aws-synthetics-logger-local@0.1.6"

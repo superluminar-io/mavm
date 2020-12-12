@@ -3,21 +3,22 @@
 var synthetics = require('Synthetics');
 const LOG = require('SyntheticsLogger');
 const AWS = require('aws-sdk');
-const { v4: uuidv4 } = require('uuid');
-const util = require('util');
 const fs = require('fs');
 
 const CONNECT_SSM_PARAMETER = '/superwerker/tests/connect' // TODO: rename
-
-const randomSuffix = uuidv4().split('-')[0];
-const ACCOUNT_EMAIL = `superwerker-aws-test+${randomSuffix}@superluminar.io`; // TODO: this has to be generated from a subdomain which is under control so we can close the account automatically
 
 exports.handler = async () => {
     return await signup();
 };
 
-
 const signup = async function () {
+
+    const sqs = new AWS.SQS();
+    const message = await sqs.receiveMessage({
+        QueueUrl: '',
+        MaxNumberOfMessages: 1,
+        VisibilityTimeout: 300,
+    }).promise();
 
     const secretsmanager = new AWS.SecretsManager();
     let secretsmanagerresponse = await secretsmanager.getSecretValue({
@@ -37,8 +38,6 @@ const signup = async function () {
     let page = await synthetics.getPage();
 
     await synthetics.executeStep('pwResetEmailRequest', async function () {
-
-        const ACCOUNT_NAME = util.format(secretdata.accountname, randomSuffix)
 
         await page.goto('https://portal.aws.amazon.com/billing/signup#/start')
         await page.waitForSelector('#ccEmail', {timeout: 15000});

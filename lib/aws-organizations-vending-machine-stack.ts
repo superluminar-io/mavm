@@ -1,9 +1,13 @@
 import * as cdk from '@aws-cdk/core';
 import {CfnResource} from '@aws-cdk/core';
-import {StateMachine, StateMachineType} from '@aws-cdk/aws-stepfunctions';
+import * as sfn from '@aws-cdk/aws-stepfunctions';
 import * as tasks from '@aws-cdk/aws-stepfunctions-tasks';
 import * as lambda from '@aws-cdk/aws-lambda-nodejs';
 import * as cws from '@aws-cdk/aws-synthetics';
+import * as sqs from '@aws-cdk/aws-sqs';
+import * as dynamodb from '@aws-cdk/aws-dynamodb';
+import {BillingMode} from '@aws-cdk/aws-dynamodb';
+
 import {PolicyStatement, Role, ServicePrincipal} from "@aws-cdk/aws-iam";
 import * as path from "path";
 import * as fs from "fs";
@@ -28,29 +32,59 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             }
         ));
 
-        let triggerAccountCreationFunction = new lambda.NodejsFunction(this, 'SubmitLambda', {
-            entry: 'code/start-canary.ts',
-            environment: {
-                CANARY_NAME: canary.canaryName
-            }
+        let genIdFunction = new lambda.NodejsFunction(this, 'SubmitLambda', {
+            entry: 'code/gen-id.ts',
+            // environment: {
+            //     CANARY_NAME: canary.canaryName
+            // }
         });
-        triggerAccountCreationFunction.addToRolePolicy(new PolicyStatement(
-            {
-                resources: ['*'],
-                actions: ['synthetics:StartCanary'],
-            }
-        ))
-        const createAccountStep = new tasks.LambdaInvoke(this, 'Submit Job', {
-            lambdaFunction: triggerAccountCreationFunction,
-            outputPath: '$.Payload',
+        // genIdFunction.addToRolePolicy(new PolicyStatement(
+        //     {
+        //         resources: ['*'],
+        //         actions: ['synthetics:StartCanary'],
+        //     }
+        // ))
+        const createAccountStep = new tasks.LambdaInvoke(this, 'GenId', {
+            lambdaFunction: genIdFunction,
+            resultPath: '$.genId',
         });
 
-        const stateMachine = new StateMachine(
+        const table = new dynamodb.Table(this, "AccountsTable", {
+            partitionKey: {
+                name: 'account_name',
+                type: dynamodb.AttributeType.STRING,
+            },
+            billingMode: BillingMode.PAY_PER_REQUEST,
+        });
+
+        const writeAccountDataStep = new tasks.DynamoPutItem(this, 'WriteAccountDataStep', {
+            item: {
+                account_name:  tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.Payload.accountName')),
+                account_email: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.Payload.accountEmail')),
+            },
+            table: table,
+            inputPath: '$.genId',
+            outputPath: '$.genId',
+        });
+
+        const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
+            queueName: 'accountCreationQueue', // TODO: don't hardcode once we can pass this via env to the canary
+        });
+        const submitAccountStep = new tasks.SqsSendMessage(this, 'SubmitAccountStep', {
+            messageBody: sfn.TaskInput.fromDataAt('$.Payload'),
+            queue: accountCreationQueue,
+            inputPath: '$.genId',
+        });
+
+        const stateMachine = new sfn.StateMachine(
             this,
             'StateMachine',
             {
-                definition: createAccountStep,
-                stateMachineType: StateMachineType.EXPRESS,
+                definition: createAccountStep
+                    .next(writeAccountDataStep)
+                    .next(submitAccountStep)
+                ,
+                stateMachineType: sfn.StateMachineType.EXPRESS,
             }
         )
 
