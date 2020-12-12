@@ -64,7 +64,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             },
             table: table,
             inputPath: '$.genId.Payload',
-            resultPath: '$.genId.Payload',
+            resultPath: 'DISCARD', // see https://github.com/aws/aws-cdk/issues/1805
         });
 
         const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
