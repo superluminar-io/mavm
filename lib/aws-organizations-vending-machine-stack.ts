@@ -23,6 +23,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 handler: 'index.handler',
             }),
             startAfterCreation: false,
+            schedule: cws.Schedule.once(),
         });
 
         canary.role.addToPrincipalPolicy(new PolicyStatement(
@@ -32,19 +33,10 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             }
         ));
 
-        let genIdFunction = new lambda.NodejsFunction(this, 'SubmitLambda', {
+        let genIdFunction = new lambda.NodejsFunction(this, 'GenIdFunction', {
             entry: 'code/gen-id.ts',
-            // environment: {
-            //     CANARY_NAME: canary.canaryName
-            // }
         });
-        // genIdFunction.addToRolePolicy(new PolicyStatement(
-        //     {
-        //         resources: ['*'],
-        //         actions: ['synthetics:StartCanary'],
-        //     }
-        // ))
-        const createAccountStep = new tasks.LambdaInvoke(this, 'GenId', {
+        const genIdStep = new tasks.LambdaInvoke(this, 'GenIdStep', {
             lambdaFunction: genIdFunction,
             resultPath: '$.genId',
         });
@@ -76,13 +68,31 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             resultPath: 'DISCARD',
         });
 
+        let startAccountCreationFunction = new lambda.NodejsFunction(this, 'StartAccountCreationFunction', {
+            entry: 'code/start-canary.ts',
+            environment: {
+                CANARY_NAME: canary.canaryName
+            }
+        });
+        startAccountCreationFunction.addToRolePolicy(new PolicyStatement(
+            {
+                resources: ['*'],
+                actions: ['synthetics:StartCanary'],
+            }
+        ))
+        const startAccountCreationStep = new tasks.LambdaInvoke(this, 'StartAccountCreationStep', {
+            lambdaFunction: startAccountCreationFunction,
+        });
+
         const stateMachine = new sfn.StateMachine(
             this,
             'StateMachine',
             {
-                definition: createAccountStep
+                definition: genIdStep
                     .next(writeAccountDataStep)
-                    .next(submitAccountStep),
+                    .next(submitAccountStep)
+                    .next(startAccountCreationStep)
+                ,
                 stateMachineType: sfn.StateMachineType.EXPRESS,
             }
         )

@@ -15,10 +15,12 @@ const signup = async function () {
 
     const sqs = new AWS.SQS();
     const message = await sqs.receiveMessage({
-        QueueUrl: '',
+        QueueUrl: 'https://sqs.eu-west-1.amazonaws.com/824014778649/accountCreationQueue', // fixme: don't hardcode
         MaxNumberOfMessages: 1,
         VisibilityTimeout: 300,
+        WaitTimeSeconds: 1,
     }).promise();
+    console.log(message);
 
     const secretsmanager = new AWS.SecretsManager();
     let secretsmanagerresponse = await secretsmanager.getSecretValue({
