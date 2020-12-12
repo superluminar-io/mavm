@@ -59,21 +59,20 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
 
         const writeAccountDataStep = new tasks.DynamoPutItem(this, 'WriteAccountDataStep', {
             item: {
-                account_name:  tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.Payload.accountName')),
-                account_email: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.Payload.accountEmail')),
+                account_name:  tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.accountName')),
+                account_email: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.accountEmail')),
             },
             table: table,
-            inputPath: '$.genId',
-            outputPath: '$.genId',
+            inputPath: '$.genId.Payload',
+            resultPath: '$.genId.Payload',
         });
 
         const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
             queueName: 'accountCreationQueue', // TODO: don't hardcode once we can pass this via env to the canary
         });
         const submitAccountStep = new tasks.SqsSendMessage(this, 'SubmitAccountStep', {
-            messageBody: sfn.TaskInput.fromDataAt('$.Payload'),
+            messageBody: sfn.TaskInput.fromDataAt('$.genId.Payload'),
             queue: accountCreationQueue,
-            inputPath: '$.genId',
         });
 
         const stateMachine = new sfn.StateMachine(
@@ -82,8 +81,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             {
                 definition: createAccountStep
                     .next(writeAccountDataStep)
-                    .next(submitAccountStep)
-                ,
+                    .next(submitAccountStep),
                 stateMachineType: sfn.StateMachineType.EXPRESS,
             }
         )
