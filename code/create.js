@@ -5,10 +5,9 @@ const LOG = require('SyntheticsLogger');
 const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
 const util = require('util');
+const fs = require('fs');
 
 const CONNECT_SSM_PARAMETER = '/superwerker/tests/connect' // TODO: rename
-
-const CAPTCHA_KEY = process.env['CAPTCHA_KEY'];
 
 const randomSuffix = uuidv4().split('-')[0];
 const ACCOUNT_EMAIL = `superwerker-aws-test+${randomSuffix}@superluminar.io`; // TODO: this has to be generated from a subdomain which is under control so we can close the account automatically
@@ -39,6 +38,8 @@ const signup = async function () {
 
     await synthetics.executeStep('pwResetEmailRequest', async function () {
 
+        const ACCOUNT_NAME = util.format(secretdata.accountname, randomSuffix)
+
         await page.goto('https://portal.aws.amazon.com/billing/signup#/start')
         await page.waitForSelector('#ccEmail', {timeout: 15000});
         await page.type('#ccEmail', ACCOUNT_EMAIL);
@@ -47,7 +48,7 @@ const signup = async function () {
         await page.waitFor(1000);
         await page.type('#ccRePassword', secretdata.password);
         await page.waitFor(1000);
-        await page.type('#ccUserName', util.format(secretdata.accountname, randomSuffix));
+        await page.type('#ccUserName', ACCOUNT_NAME);
         await page.waitFor(1000);
 
         await page.click('#cc-form-box > div.cc-form-big-box > div > div.cc-form-submit-click-box > button > span > input');
@@ -55,6 +56,12 @@ const signup = async function () {
         try {
             await page.waitForSelector('#full-name', {timeout: 5000});
         } catch (e) {
+
+            await page.click('#switchToAudioBtn');
+
+            await page.waitForSelector('#audioPlayBtn')
+            await page.click('#audioPlayBtn')
+
             let captchanotdone = true;
             let captchaattempts = 0;
             while (captchanotdone) {
@@ -63,16 +70,20 @@ const signup = async function () {
                     return;
                 }
 
-                let recaptchaimg = await page.$('#imageCaptcha');
-                let recaptchaurl = await page.evaluate((obj) => {
-                    return obj.getAttribute('src');
-                }, recaptchaimg);
+                await page.waitForSelector('#refreshAudioBtn')
+                await page.click('#refreshAudioBtn')
 
+                await page.waitFor(2000);
+                await page.waitForSelector('#audioCaptcha')
+                let audioCaptcha = await page.$('#audioCaptcha');
+                let audioCaptchaUrl = await page.evaluate((audioCaptcha) => {
+                    return audioCaptcha.getAttribute('src');
+                }, audioCaptcha);
 
-                let captcharesult = await solveCaptcha2captcha(page, recaptchaurl);
+                let solvedAudioCaptcha = await solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME, captchaattemptsfordiva);
                 let input2 = await page.$('#guess');
                 await input2.press('Backspace');
-                await input2.type(captcharesult, {delay: 100});
+                await input2.type(solvedAudioCaptcha, {delay: 100});
 
                 await page.waitFor(3000);
 
@@ -152,9 +163,14 @@ const signup = async function () {
         let portalphonenumber = await page.$('#phoneNumber');
         await portalphonenumber.press('Backspace');
         await portalphonenumber.type(variables['PHONE_NUMBER'].replace("+1", ""), { delay: 100 });
-
         var phonecode = "";
         var phonecodetext = "";
+
+        await page.click('#switchToAudioBtn');
+
+        await page.waitForSelector('#audioPlayBtn')
+        await page.click('#audioPlayBtn')
+
         var captchanotdone = true;
         var captchaattemptsfordiva = 0;
         while (captchanotdone) {
@@ -163,22 +179,25 @@ const signup = async function () {
                 throw "Could not confirm phone number verification - possible error in DIVA system or credit card";
             }
             try {
-                let submitc = await page.$('#btnCall');
+                await page.waitForSelector('#refreshAudioBtn')
+                await page.click('#refreshAudioBtn')
 
-                let recaptchaimgx = await page.$('#imageCaptcha');
-                let recaptchaurlx = await page.evaluate((obj) => {
-                    return obj.getAttribute('src');
-                }, recaptchaimgx);
+                await page.waitFor(2000);
+                await page.waitForSelector('#audioCaptcha')
+                let audioCaptcha = await page.$('#audioCaptcha');
+                let audioCaptchaUrl = await page.evaluate((audioCaptcha) => {
+                    return audioCaptcha.getAttribute('src');
+                }, audioCaptcha);
 
-                let result = await solveCaptcha2captcha(page, recaptchaurlx);
+                let solvedAudioCaptcha = await solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME, captchaattemptsfordiva);
 
                 let input32 = await page.$('#guess');
                 await input32.press('Backspace');
-                await input32.type(result, { delay: 100 });
+                await input32.type(solvedAudioCaptcha, { delay: 100 });
 
+                let submitc = await page.$('#btnCall');
                 await submitc.click();
                 await page.waitFor(5000);
-
 
                 await page.waitForSelector('.phone-pin-number', {timeout: 5000});
 
@@ -206,43 +225,14 @@ const signup = async function () {
 
         try {
             // wait for amazon connect to answer the call
-            await page.waitForSelector('#verification-complete-button', {timeout: 30000});
+            await page.waitFor(30000);
             await page.click('#verification-complete-button');
         } catch(err) {
-            LOG.error("Could not confirm phone number verification - possible error in DIVA system or credit card");
+            LOG.error("Could not confirm phone number verification - possible error in DIVA system or credit card:" + err);
             throw err;
         }
     });
 };
-
-const solveCaptcha2captcha = async (page, url) => {
-    var imgbody = await httpGetBinary(url).then(res => {
-        return res;
-    });
-
-    var captcharef = await httpPostJson('https://2captcha.com/in.php', {
-        'key': CAPTCHA_KEY,
-        'method': 'base64',
-        'body': imgbody.toString('base64')
-    }).then(res => {
-        console.log('2Captcha: ' + res)
-        return res.split("|").pop();
-    });
-
-    var captcharesult = '';
-    var i = 0;
-    while (!captcharesult.startsWith("OK") && i < 20) {
-        await new Promise(resolve => { setTimeout(resolve, 5000); });
-
-        captcharesult = await httpGet('https://2captcha.com/res.php?key=' + CAPTCHA_KEY + '&action=get&id=' + captcharef).then(res => {
-            return res;
-        });
-
-        i++;
-    }
-
-    return captcharesult.split("|").pop();
-}
 
 const httpGet = url => {
     const https = require('https');
@@ -268,37 +258,75 @@ const httpGetBinary = url => {
     });
 };
 
-const httpPostJson = (url, postData) => {
-    const https = require('https');
-    var querystring = require('querystring');
+async function solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME, captchaattempts) {
 
-    postData = querystring.stringify(postData);
+    const s3 = new AWS.S3();
+    const transcribe = new AWS.TranscribeService();
 
-    var options = {
-        method: 'POST',
-    };
+    let audioCaptchaUrlResult = await httpGetBinary(audioCaptchaUrl);
+    let audioCaptchaUrlTempDir = fs.mkdtempSync('/tmp/audiocaptcha');
+    let audioCaptchaUrlFilename = audioCaptchaUrlTempDir + '/audiocaptcha.mp3';
+    fs.writeFileSync(audioCaptchaUrlFilename, audioCaptchaUrlResult);
 
-    return new Promise((resolve, reject) => {
-        let req = https.request(url, options);
-        req.on('response', (res) => {
-            //If the response status code is not a 2xx success code
-            if (res.statusCode < 200 || res.statusCode > 299) {
-                reject("Failed: " + options.path);
+    const s3Key = ACCOUNT_NAME + '.mp3'
+    const s3Bucket = 'audiocaptchatest2';
+    await s3.upload({
+            'Bucket': s3Bucket,
+            'Body': fs.readFileSync(audioCaptchaUrlFilename),
+            'Key': s3Key,
+        }
+    ).promise(); // TODO: auto-expiration
+
+    let audioCaptchaS3Uri = `s3://${s3Bucket}/${s3Key}`;
+    const transcriptionJobName = ACCOUNT_NAME + captchaattempts;
+    await transcribe.startTranscriptionJob(
+        {
+            TranscriptionJobName: transcriptionJobName,
+            Media: {
+                MediaFileUri: audioCaptchaS3Uri
+            },
+            LanguageCode: "en-US",
+        }
+    ).promise();
+
+    let transScribeJobfinished = false;
+    let transScribeResultUrl = '';
+    while (!transScribeJobfinished) {
+        let transScribeJob = await transcribe.getTranscriptionJob(
+            {
+                TranscriptionJobName: transcriptionJobName,
             }
+        ).promise();
+        if (transScribeJob.TranscriptionJob.TranscriptionJobStatus === 'COMPLETED') {
+            transScribeResultUrl = transScribeJob.TranscriptionJob.Transcript.TranscriptFileUri;
+            break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 5000)); // one does not simply sleep() in node
+    }
 
-            res.setEncoding('utf8');
-            let body = '';
-            res.on('data', chunk => {
-                body += chunk;
-            });
-            res.on('end', () => resolve(body));
-        });
+    let data = await httpGet(transScribeResultUrl);
+    let audioCaptchaTranscribeResult = JSON.parse(data);
 
-        req.on('error', (error) => {
-            reject(error);
-        });
+    let solvedAudioCaptcha = '';
 
-        req.write(postData);
-        req.end();
+    audioCaptchaTranscribeResult.results.items.forEach(item => {
+        let content = parseInt(item.alternatives[0].content);
+
+        function wordsToNumbers(content) {
+            const numbers = ['zero', 'one', 'two', 'three', 'for', 'five', 'six', 'seven', 'eight', 'nine'];
+            const key = numbers.indexOf(content);
+            if (key !== -1) {
+                return key;
+            }
+            return '';
+        }
+
+        if (!isNaN(content)) {
+            solvedAudioCaptcha += content;
+        } else {
+            solvedAudioCaptcha += wordsToNumbers(item.alternatives[0].content);
+        }
     });
-};
+    console.debug("Resolved audio captcha: " + solvedAudioCaptcha)
+    return solvedAudioCaptcha;
+}
