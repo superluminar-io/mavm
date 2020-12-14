@@ -14,13 +14,19 @@ exports.handler = async () => {
 const signup = async function () {
 
     const sqs = new AWS.SQS();
-    const message = await sqs.receiveMessage({
-        QueueUrl: 'https://sqs.eu-west-1.amazonaws.com/824014778649/accountCreationQueue', // fixme: don't hardcode
+    const QUEUE_URL = 'https://sqs.eu-west-1.amazonaws.com/824014778649/accountCreationQueue';
+    const sqsMessage = await sqs.receiveMessage({
+        QueueUrl: QUEUE_URL, // fixme: don't hardcode
         MaxNumberOfMessages: 1,
         VisibilityTimeout: 300,
-        WaitTimeSeconds: 1,
     }).promise();
-    console.log(message);
+    if (typeof sqsMessage.Messages === 'undefined') {
+        return;
+    }
+
+    const accountCreationRequest = JSON.parse(sqsMessage.Messages[0].Body);
+    const ACCOUNT_NAME = accountCreationRequest.accountName;
+    const ACCOUNT_EMAIL = accountCreationRequest.accountEmail;
 
     const secretsmanager = new AWS.SecretsManager();
     let secretsmanagerresponse = await secretsmanager.getSecretValue({
@@ -228,6 +234,13 @@ const signup = async function () {
             // wait for amazon connect to answer the call
             await page.waitFor(30000);
             await page.click('#verification-complete-button');
+
+            // TODO: read account id and write to dyanomo
+
+            await sqs.deleteMessage({
+                QueueUrl: QUEUE_URL,
+                ReceiptHandle: sqsMessage.Messages[0].ReceiptHandle,
+            }).promise();
         } catch(err) {
             LOG.error("Could not confirm phone number verification - possible error in DIVA system or credit card:" + err);
             throw err;
