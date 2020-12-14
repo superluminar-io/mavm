@@ -324,19 +324,18 @@ async function solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME, captchaattempts)
     let solvedAudioCaptcha = '';
 
     audioCaptchaTranscribeResult.results.items.forEach(item => {
-        let content = parseInt(item.alternatives[0].content);
 
         function wordsToNumbers(content) {
             const numbers = ['zero', 'one', 'two', 'three', 'for', 'five', 'six', 'seven', 'eight', 'nine'];
-            const key = numbers.indexOf(content);
+            const key = numbers.indexOf(content.toLowerCase());
             if (key !== -1) {
                 return key;
             }
             return '';
         }
 
-        if (!isNaN(content)) {
-            solvedAudioCaptcha += content;
+        if (!isNaN(parseInt(item.alternatives[0].content))) {
+            solvedAudioCaptcha += item.alternatives[0].content;
         } else {
             solvedAudioCaptcha += wordsToNumbers(item.alternatives[0].content);
         }
