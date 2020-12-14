@@ -87,7 +87,7 @@ const signup = async function () {
                     return audioCaptcha.getAttribute('src');
                 }, audioCaptcha);
 
-                let solvedAudioCaptcha = await solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME, captchaattemptsfordiva);
+                let solvedAudioCaptcha = await solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME, captchaattempts);
                 let input2 = await page.$('#guess');
                 await input2.press('Backspace');
                 await input2.type(solvedAudioCaptcha, {delay: 100});
