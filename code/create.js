@@ -45,7 +45,7 @@ const signup = async function () {
 
     let page = await synthetics.getPage();
 
-    await synthetics.executeStep('pwResetEmailRequest', async function () {
+    await synthetics.executeStep('signup', async function () {
 
         await page.goto('https://portal.aws.amazon.com/billing/signup#/start')
         await page.waitForSelector('#ccEmail', {timeout: 15000});
