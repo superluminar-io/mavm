@@ -346,7 +346,8 @@ async function solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME, captchaattempts)
     let audioCaptchaUrlFilename = audioCaptchaUrlTempDir + '/audiocaptcha.mp3';
     fs.writeFileSync(audioCaptchaUrlFilename, audioCaptchaUrlResult);
 
-    const s3Key = ACCOUNT_NAME + '.mp3'
+    const transcriptionJobName = ACCOUNT_NAME + captchaattempts;
+    const s3Key = transcriptionJobName + '.mp3'
     const s3Bucket = 'audiocaptchatest2';
     await s3.upload({
             'Bucket': s3Bucket,
@@ -356,7 +357,6 @@ async function solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME, captchaattempts)
     ).promise(); // TODO: auto-expiration
 
     let audioCaptchaS3Uri = `s3://${s3Bucket}/${s3Key}`;
-    const transcriptionJobName = ACCOUNT_NAME + captchaattempts;
     await transcribe.startTranscriptionJob(
         {
             TranscriptionJobName: transcriptionJobName,
