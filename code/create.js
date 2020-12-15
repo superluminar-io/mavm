@@ -7,7 +7,7 @@ const sqs = new AWS.SQS();
 const fs = require('fs');
 
 const CONNECT_SSM_PARAMETER = '/superwerker/tests/connect' // TODO: rename
-const QUEUE_URL = 'https://sqs.eu-west-1.amazonaws.com/824014778649/accountCreationQueue';
+const QUEUE_URL = 'https://sqs.eu-west-1.amazonaws.com/824014778649/accountCreationQueue2';
 
 exports.handler = async () => {
     return await signup();

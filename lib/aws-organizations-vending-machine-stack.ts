@@ -61,7 +61,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         });
 
         const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
-            queueName: 'accountCreationQueue', // TODO: don't hardcode once we can pass this via env to the canary
+            queueName: 'accountCreationQueue2', // TODO: don't hardcode once we can pass this via env to the canary
         });
         const submitAccountStep = new tasks.SqsSendMessage(this, 'SubmitAccountStep', {
             messageBody: sfn.TaskInput.fromDataAt('$.genId.Payload'),
