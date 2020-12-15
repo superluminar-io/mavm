@@ -45,7 +45,7 @@ const signup = async function () {
 
     let page = await synthetics.getPage();
 
-    await synthetics.executeStep('signup', async function () {
+    await synthetics.executeStep('signupPage1', async function () {
 
         await page.goto('https://portal.aws.amazon.com/billing/signup#/start')
         await page.waitForSelector('#ccEmail', {timeout: 15000});
@@ -104,7 +104,9 @@ const signup = async function () {
                 }
             }
         }
+    });
 
+    await synthetics.executeStep('signupPage2', async function () {
 
         await page.type('#company', secretdata.company, {delay: 100});
         await page.waitFor(1000);
@@ -135,7 +137,9 @@ const signup = async function () {
 
         await page.click('div.form-submit-click-box > button > span > input')
         await page.waitFor(1000);
+    });
 
+    await synthetics.executeStep('signupCreditCard', async function () {
         let input5 = await page.$('#credit-card-number');
         await input5.press('Backspace');
         await input5.type(secretdata.ccnumber, { delay: 100 });
@@ -155,7 +159,9 @@ const signup = async function () {
         await page.waitFor(2000);
 
         await page.click('.form-submit-click-box > button');
+    });
 
+    await synthetics.executeStep('signupVerification', async function () {
         await page.waitForSelector('#ng-app > div > div.main-content-new.ng-scope > div.ng-scope > div > div.form-box > div.form-content-box > div.form-big-box.ng-pristine.ng-invalid.ng-invalid-required.ng-valid-pattern.ng-valid-phone-length-limit.ng-valid-maxlength > div.contact-form-box > div:nth-child(1) > div > label:nth-child(2) > input', {timeout: 5000});
         await page.$eval('#ng-app > div > div.main-content-new.ng-scope > div.ng-scope > div > div.form-box > div.form-content-box > div.form-big-box.ng-pristine.ng-invalid.ng-invalid-required.ng-valid-pattern.ng-valid-phone-length-limit.ng-valid-maxlength > div.contact-form-box > div:nth-child(1) > div > label:nth-child(2) > input', elem => elem.click());
 
@@ -230,6 +236,9 @@ const signup = async function () {
             Overwrite: true
         }).promise();
 
+    });
+
+    await synthetics.executeStep('signupFinish', async function () {
         try {
             // wait for amazon connect to answer the call
             await page.waitFor(30000);
