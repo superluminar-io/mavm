@@ -3,9 +3,11 @@
 var synthetics = require('Synthetics');
 const LOG = require('SyntheticsLogger');
 const AWS = require('aws-sdk');
+const sqs = new AWS.SQS();
 const fs = require('fs');
 
 const CONNECT_SSM_PARAMETER = '/superwerker/tests/connect' // TODO: rename
+const QUEUE_URL = 'https://sqs.eu-west-1.amazonaws.com/824014778649/accountCreationQueue';
 
 exports.handler = async () => {
     return await signup();
@@ -13,8 +15,6 @@ exports.handler = async () => {
 
 const signup = async function () {
 
-    const sqs = new AWS.SQS();
-    const QUEUE_URL = 'https://sqs.eu-west-1.amazonaws.com/824014778649/accountCreationQueue';
     const sqsMessage = await sqs.receiveMessage({
         QueueUrl: QUEUE_URL, // fixme: don't hardcode
         MaxNumberOfMessages: 1,
@@ -244,17 +244,72 @@ const signup = async function () {
             await page.waitFor(30000);
             await page.click('#verification-complete-button');
 
-            // TODO: read account id and write to dyanomo
-
-            await sqs.deleteMessage({
-                QueueUrl: QUEUE_URL,
-                ReceiptHandle: sqsMessage.Messages[0].ReceiptHandle,
-            }).promise();
+            await page.goto('https://portal.aws.amazon.com/billing/signup?type=resubscribe#/support')
+            await page.waitFor(3000);
+            await page.click('#ng-app > div > div.main-content-new.ng-scope > div.ng-scope > div > div.form-content-box > div.select-plan-big-box.awsui-grid.awsui-container > div:nth-child(1) > div:nth-child(1) > div.awsui-row > div.c-xxs-12.plan-click-box > button');
+            await page.waitFor(3000);
         } catch(err) {
             LOG.error("Could not confirm phone number verification - possible error in DIVA system or credit card:" + err);
             throw err;
         }
+
     });
+
+    await synthetics.executeStep('loginToAccount', async function () {
+        // log in to get account id
+        await page.goto('https://console.aws.amazon.com/console/home', {
+            timeout: 0,
+            waitUntil: ['domcontentloaded']
+        });
+        await page.waitForSelector('#resolving_input', {timeout: 15000});
+        await page.waitFor(500);
+
+        let resolvinginput = await page.$('#resolving_input');
+        await resolvinginput.press('Backspace');
+        await resolvinginput.type(ACCOUNT_EMAIL, { delay: 100 });
+
+        await page.click('#next_button');
+        await page.waitFor(3000);
+
+        let input4 = await page.$('#password');
+        await input4.press('Backspace');
+        await input4.type(secretdata.password, { delay: 100 });
+
+        await page.click('#signin_button');
+        await page.waitFor(8000);
+
+    });
+
+    await synthetics.executeStep('getAccountIdViaApi', async function () {
+        await page.goto('https://console.aws.amazon.com/billing/rest/v1.0/account', {
+            timeout: 0,
+            waitUntil: ['domcontentloaded']
+        });
+        await page.waitFor(3000);
+        const innerText = await page.evaluate(() => document.querySelector('pre').innerText);
+        const account = JSON.parse(innerText);
+
+        const ddb = new AWS.DynamoDB();
+        await ddb.updateItem({
+            Key: {
+                account_name: {
+                    S: ACCOUNT_NAME
+                }
+            },
+            TableName: 'account',
+            UpdateExpression: "SET account_id = :account_id",
+            ExpressionAttributeValues: {
+                ":account_id": {
+                    S: account['accountId']
+                }
+            },
+        }).promise();
+    });
+
+    await sqs.deleteMessage({
+        QueueUrl: QUEUE_URL,
+        ReceiptHandle: sqsMessage.Messages[0].ReceiptHandle,
+    }).promise();
 };
 
 const httpGet = url => {

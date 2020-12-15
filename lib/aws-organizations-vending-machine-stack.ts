@@ -42,6 +42,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         });
 
         const table = new dynamodb.Table(this, "AccountsTable", {
+            tableName: 'account', // don't hardcode once env can be passed to canary
             partitionKey: {
                 name: 'account_name',
                 type: dynamodb.AttributeType.STRING,
