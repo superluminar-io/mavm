@@ -56,7 +56,7 @@ const signup = async function () {
         } catch(e) {
             console.log("verification probably already done.")
         }
-        await saveAccountIdAndFinish(page, ACCOUNT_NAME);
+        await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
         return;
     } catch (e) {
         // sometimes a captcha appears here, solving might need to get implemented
@@ -71,7 +71,7 @@ const signup = async function () {
 
     await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
 
-    await saveAccountIdAndFinish(page, ACCOUNT_NAME);
+    await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
 };
 
 const httpGet = url => {
@@ -284,7 +284,7 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
     });
 }
 
-async function saveAccountIdAndFinish(page, ACCOUNT_NAME) {
+async function saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage) {
     await synthetics.executeStep('saveAccountIdAndFinish', async function () {
         await page.goto('https://console.aws.amazon.com/billing/rest/v1.0/account', {
             timeout: 0,
