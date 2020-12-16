@@ -19,12 +19,13 @@ const signup = async function () {
 
     let ACCOUNT_NAME;
     let ACCOUNT_EMAIL;
+    let sqsMessage;
 
     if (process.env['ACCOUNT_NAME']) {
         ACCOUNT_NAME = process.env['ACCOUNT_NAME'];
         ACCOUNT_EMAIL = process.env['ACCOUNT_EMAIL'];
     } else {
-        const sqsMessage = await sqs.receiveMessage({
+        sqsMessage = await sqs.receiveMessage({
             QueueUrl: QUEUE_URL, // fixme: don't hardcode
             MaxNumberOfMessages: 1,
             VisibilityTimeout: 300,
@@ -59,33 +60,33 @@ const signup = async function () {
     try {
         await page.waitForSelector('#ng-app > div > div.main-content-new.ng-scope > div.header-error-msg-bar.ng-scope > div > div.header-error-msg-text > p > span > span', {timeout: 5000});
         console.log("account already registered, log in");
-        await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
-        await page.goto('https://portal.aws.amazon.com/billing/signup?type=resubscribe#/identityverification');
         try {
-            await signupVerification(page, variables, ACCOUNT_NAME, ssm);
-        } catch(e) {
-            console.log("verification probably already done.")
+            await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
+            await page.goto('https://portal.aws.amazon.com/billing/signup?type=resubscribe#/identityverification');
+            try {
+                await signupVerification(page, variables, ACCOUNT_NAME, ssm);
+            } catch(e) {
+                console.log("verification probably already done.")
+            }
+            await createCrossAccountRole(page, PRINCIPAL);
+            await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
+        } catch (e) {
+            console.log("retried signup, but got exception: " + e);
         }
-        await createCrossAccountRole(page, PRINCIPAL);
-        await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
-        return;
     } catch (e) {
-        // sometimes a captcha appears here, solving might need to get implemented
+        // continue with usual signup
+        await signupPageTwo(page, secretdata, variables);
+
+        await signupCreditCard(page, secretdata);
+
+        await signupVerification(page, variables, ACCOUNT_NAME, ssm);
+
+        await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
+
+        await createCrossAccountRole(page, PRINCIPAL);
+
+        await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
     }
-
-
-    await signupPageTwo(page, secretdata, variables);
-
-    await signupCreditCard(page, secretdata);
-
-    await signupVerification(page, variables, ACCOUNT_NAME, ssm);
-
-    await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
-
-    await createCrossAccountRole(page, PRINCIPAL);
-
-    await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
-
 };
 
 const httpGet = url => {
@@ -331,10 +332,12 @@ async function saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage) {
             },
         }).promise();
 
-        await sqs.deleteMessage({
-            QueueUrl: QUEUE_URL,
-            ReceiptHandle: sqsMessage.Messages[0].ReceiptHandle,
-        }).promise();
+        if (sqsMessage) {
+            await sqs.deleteMessage({
+                QueueUrl: QUEUE_URL,
+                ReceiptHandle: sqsMessage.Messages[0].ReceiptHandle,
+            }).promise();
+        }
     });
 }
 
