@@ -5,9 +5,11 @@ const LOG = require('SyntheticsLogger');
 const AWS = require('aws-sdk');
 const sqs = new AWS.SQS();
 const fs = require('fs');
+const util = require('util');
 
 const CONNECT_SSM_PARAMETER = '/superwerker/tests/connect' // TODO: rename
-const QUEUE_URL = 'https://sqs.eu-west-1.amazonaws.com/824014778649/accountCreationQueue2';
+const PRINCIPAL = '824014778649';
+const QUEUE_URL = util.format('https://sqs.eu-west-1.amazonaws.com/%s/accountCreationQueue2', PRINCIPAL);
 
 exports.handler = async () => {
     return await signup();
@@ -15,18 +17,26 @@ exports.handler = async () => {
 
 const signup = async function () {
 
-    const sqsMessage = await sqs.receiveMessage({
-        QueueUrl: QUEUE_URL, // fixme: don't hardcode
-        MaxNumberOfMessages: 1,
-        VisibilityTimeout: 300,
-    }).promise();
-    if (typeof sqsMessage.Messages === 'undefined') {
-        return;
-    }
+    let ACCOUNT_NAME;
+    let ACCOUNT_EMAIL;
 
-    const accountCreationRequest = JSON.parse(sqsMessage.Messages[0].Body);
-    const ACCOUNT_NAME = accountCreationRequest.accountName;
-    const ACCOUNT_EMAIL = accountCreationRequest.accountEmail;
+    if (process.env['ACCOUNT_NAME']) {
+        ACCOUNT_NAME = process.env['ACCOUNT_NAME'];
+        ACCOUNT_EMAIL = process.env['ACCOUNT_EMAIL'];
+    } else {
+        const sqsMessage = await sqs.receiveMessage({
+            QueueUrl: QUEUE_URL, // fixme: don't hardcode
+            MaxNumberOfMessages: 1,
+            VisibilityTimeout: 300,
+        }).promise();
+        if (typeof sqsMessage.Messages === 'undefined') {
+            return;
+        }
+
+        const accountCreationRequest = JSON.parse(sqsMessage.Messages[0].Body);
+        ACCOUNT_NAME = accountCreationRequest.accountName;
+        ACCOUNT_EMAIL = accountCreationRequest.accountEmail;
+    }
 
     const secretsmanager = new AWS.SecretsManager();
     let secretsmanagerresponse = await secretsmanager.getSecretValue({
@@ -56,6 +66,7 @@ const signup = async function () {
         } catch(e) {
             console.log("verification probably already done.")
         }
+        await createCrossAccountRole(page, PRINCIPAL);
         await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
         return;
     } catch (e) {
@@ -71,7 +82,10 @@ const signup = async function () {
 
     await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
 
+    await createCrossAccountRole(page, PRINCIPAL);
+
     await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
+
 };
 
 const httpGet = url => {
@@ -400,4 +414,40 @@ async function signupCreditCard(page, secretdata) {
 
         await page.click('.form-submit-click-box > button');
     });
+}
+
+async function createCrossAccountRole(page, PRINCIPAL) {
+
+    await synthetics.executeStep('createCrossAccountRole', async function () {
+
+        let init = util.format('https://console.aws.amazon.com/iam/home?region=eu-west-1#/roles$new?step=review&roleType=crossAccount&accountID=%s&policies=arn:aws:iam::aws:policy%2FAdministratorAccess', PRINCIPAL)
+
+        // log in to get account id
+        await page.goto(init, {
+            timeout: 0,
+            waitUntil: ['domcontentloaded']
+        });
+
+        let selector = '#iam-content > roleslist > parent-view > div.ng-scope > new-role-wizard > wizard > div > div.wizard-body > div > div.wizard-footer.wizard-footer-height > div.buttons > awsui-button.wizard-next-button > button'
+
+        await page.waitForSelector(selector, {timeout: 5000});
+        await page.click(selector);
+
+        await page.waitForSelector(selector, {timeout: 5000});
+        await page.click(selector);
+
+        await page.waitForSelector(selector, {timeout: 5000});
+        await page.click(selector);
+
+        await page.type('#awsui-textfield-13', 'OVMCrossAccountRole', {delay: 100});
+        await page.waitFor(3000);
+
+        await page.waitFor(10000); // delete me
+        // click on "create role"
+
+        await page.waitForSelector(selector, {timeout: 5000});
+        await page.click(selector);
+
+    });
+
 }
