@@ -6,9 +6,9 @@ import * as lambda from '@aws-cdk/aws-lambda-nodejs';
 import * as cws from '@aws-cdk/aws-synthetics';
 import * as sqs from '@aws-cdk/aws-sqs';
 import * as dynamodb from '@aws-cdk/aws-dynamodb';
+import {BillingMode, ProjectionType} from '@aws-cdk/aws-dynamodb';
 import * as httpapi from '@aws-cdk/aws-apigatewayv2';
 import * as httpapiint from '@aws-cdk/aws-apigatewayv2-integrations';
-import {BillingMode} from '@aws-cdk/aws-dynamodb';
 
 import {PolicyStatement, Role, ServicePrincipal} from "@aws-cdk/aws-iam";
 import * as path from "path";
@@ -50,6 +50,14 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 type: dynamodb.AttributeType.STRING,
             },
             billingMode: BillingMode.PAY_PER_REQUEST,
+        });
+        table.addGlobalSecondaryIndex({
+            indexName: "account_status",
+            partitionKey: {
+                name: 'account_name',
+                type: dynamodb.AttributeType.STRING,
+            },
+            projectionType: ProjectionType.KEYS_ONLY,
         });
 
         const writeAccountDataStep = new tasks.DynamoPutItem(this, 'WriteAccountDataStep', {
