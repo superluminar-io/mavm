@@ -6,6 +6,8 @@ import * as lambda from '@aws-cdk/aws-lambda-nodejs';
 import * as cws from '@aws-cdk/aws-synthetics';
 import * as sqs from '@aws-cdk/aws-sqs';
 import * as dynamodb from '@aws-cdk/aws-dynamodb';
+import * as httpapi from '@aws-cdk/aws-apigatewayv2';
+import * as httpapiint from '@aws-cdk/aws-apigatewayv2-integrations';
 import {BillingMode} from '@aws-cdk/aws-dynamodb';
 
 import {PolicyStatement, Role, ServicePrincipal} from "@aws-cdk/aws-iam";
@@ -137,6 +139,25 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                     "x-amazon-apigateway-importexport-version": "1.0"
                 }
             }
-        })
+        });
+
+        const api = new httpapi.HttpApi(this, "OrgVendingApi");
+
+        const getAvailableAccountFunction = new lambda.NodejsFunction(this, 'GetAvailableAccountFunction', {
+            entry: 'code/get-available-account.ts',
+        });
+        getAvailableAccountFunction.addToRolePolicy(new PolicyStatement(
+            {
+                resources: ['*'],
+                actions: ['dynamodb:*'], // TODO: least privilege
+            }
+        ));
+        api.addRoutes({
+            path: '/vend',
+            methods: [ httpapi.HttpMethod.GET ],
+            integration: new httpapiint.LambdaProxyIntegration({
+                handler: getAvailableAccountFunction,
+            }),
+        });
     }
 }
