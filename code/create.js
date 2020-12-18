@@ -323,7 +323,7 @@ async function saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage) {
                     S: account['accountId']
                 },
                 ":registration_date": {
-                    N: account['registrationDate'].toString()
+                    S: new Date().toISOString()
                 },
                 ":account_status": {
                     S: 'CREATED'
