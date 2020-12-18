@@ -275,20 +275,20 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
         } catch (error) {
             LOG.error(error);
         }
-
-        variables['CODE'] = phonecodetext;
-
-        await ssm.putParameter({
-            Name: CONNECT_SSM_PARAMETER,
-            Type: "String",
-            Value: JSON.stringify(variables),
-            Overwrite: true
-        }).promise();
-
-        // wait for amazon connect to answer the call
-        await page.waitFor(50000);
-        await page.click('#verification-complete-button');
     }
+
+    variables['CODE'] = phonecodetext;
+
+    await ssm.putParameter({
+        Name: CONNECT_SSM_PARAMETER,
+        Type: "String",
+        Value: JSON.stringify(variables),
+        Overwrite: true
+    }).promise();
+
+    // wait for amazon connect to answer the call
+    await page.waitFor(50000);
+    await page.click('#verification-complete-button');
 }
 
 async function saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage) {
