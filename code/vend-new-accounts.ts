@@ -27,7 +27,7 @@ exports.handler = async (event: any, context: any, callback: any) => {
         const account_to_create = {
             'account_name': account_name,
             'account_email': account_email,
-            'status': 'TO_CREATE',
+            'account_status': 'TO_CREATE',
         };
 
         await dynamoDB.put(
