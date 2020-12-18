@@ -35,7 +35,7 @@ exports.handler = async (event: any, context: any, callback: any) => {
                 TableName: 'account',
                 Item: account_to_create
             }
-        );
+        ).promise();
         await sqs.sendMessage(
             {
                 MessageBody: JSON.stringify(account_to_create),
