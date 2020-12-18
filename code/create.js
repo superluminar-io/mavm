@@ -59,15 +59,11 @@ const signup = async function () {
 
     try {
         await page.waitForSelector('#ng-app > div > div.main-content-new.ng-scope > div.header-error-msg-bar.ng-scope > div > div.header-error-msg-text > p > span > span', {timeout: 5000});
-        console.log("account already registered, log in");
         try {
+            console.log("account already registered, log in");
             await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
             await page.goto('https://portal.aws.amazon.com/billing/signup?type=resubscribe#/identityverification');
-            try {
-                await signupVerification(page, variables, ACCOUNT_NAME, ssm);
-            } catch(e) {
-                console.log("verification probably already done.")
-            }
+            await signupVerification(page, variables, ACCOUNT_NAME, ssm);
             await createCrossAccountRole(page, PRINCIPAL);
             await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
         } catch (e) {
