@@ -35,8 +35,8 @@ const signup = async function () {
         }
 
         const accountCreationRequest = JSON.parse(sqsMessage.Messages[0].Body);
-        ACCOUNT_NAME = accountCreationRequest.accountName;
-        ACCOUNT_EMAIL = accountCreationRequest.accountEmail;
+        ACCOUNT_NAME = accountCreationRequest.account_name;
+        ACCOUNT_EMAIL = accountCreationRequest.account_email;
     }
 
     const secretsmanager = new AWS.SecretsManager();

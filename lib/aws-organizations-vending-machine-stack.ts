@@ -9,6 +9,8 @@ import * as dynamodb from '@aws-cdk/aws-dynamodb';
 import {BillingMode, ProjectionType} from '@aws-cdk/aws-dynamodb';
 import * as httpapi from '@aws-cdk/aws-apigatewayv2';
 import * as httpapiint from '@aws-cdk/aws-apigatewayv2-integrations';
+import * as events from '@aws-cdk/aws-events';
+import * as targets from '@aws-cdk/aws-events-targets';
 
 import {PolicyStatement, Role, ServicePrincipal} from "@aws-cdk/aws-iam";
 import * as path from "path";
@@ -25,7 +27,9 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 handler: 'index.handler',
             }),
             startAfterCreation: false,
-            schedule: cws.Schedule.once(),
+
+            // start it regularly, this actually fakes a "watchdog" / "angel" process which keeps account creation running
+            schedule: cws.Schedule.expression('rate(10 minutes)'),
         });
 
         canary.role.addToPrincipalPolicy(new PolicyStatement(
@@ -34,14 +38,6 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 actions: ['secretsmanager:GetSecretValue', 'ssm:*Parameter*', 'sqs:*', 's3:*', 'transcribe:*', 'dynamodb:*'], // TODO: least privilege
             }
         ));
-
-        let genIdFunction = new lambda.NodejsFunction(this, 'GenIdFunction', {
-            entry: 'code/gen-id.ts',
-        });
-        const genIdStep = new tasks.LambdaInvoke(this, 'GenIdStep', {
-            lambdaFunction: genIdFunction,
-            resultPath: '$.genId',
-        });
 
         const table = new dynamodb.Table(this, "AccountsTable", {
             tableName: 'account', // don't hardcode once env can be passed to canary
@@ -54,60 +50,18 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         table.addGlobalSecondaryIndex({
             indexName: "account_status",
             partitionKey: {
-                name: 'account_name',
+                name: 'account_status',
                 type: dynamodb.AttributeType.STRING,
             },
-            projectionType: ProjectionType.KEYS_ONLY,
-        });
-
-        const writeAccountDataStep = new tasks.DynamoPutItem(this, 'WriteAccountDataStep', {
-            item: {
-                account_name:  tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.accountName')),
-                account_email: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.accountEmail')),
-            },
-            table: table,
-            inputPath: '$.genId.Payload',
-            resultPath: 'DISCARD',
         });
 
         const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
             queueName: 'accountCreationQueue2', // TODO: don't hardcode once we can pass this via env to the canary
-        });
-        const submitAccountStep = new tasks.SqsSendMessage(this, 'SubmitAccountStep', {
-            messageBody: sfn.TaskInput.fromDataAt('$.genId.Payload'),
-            queue: accountCreationQueue,
-            resultPath: 'DISCARD',
-        });
-
-        let startAccountCreationFunction = new lambda.NodejsFunction(this, 'StartAccountCreationFunction', {
-            entry: 'code/start-canary.ts',
-            environment: {
-                CANARY_NAME: canary.canaryName
+            deadLetterQueue: {
+                queue: new sqs.Queue(this, 'AccountCreationDLQueue'),
+                maxReceiveCount: 5,
             }
         });
-        startAccountCreationFunction.addToRolePolicy(new PolicyStatement(
-            {
-                resources: ['*'],
-                actions: ['synthetics:StartCanary'],
-            }
-        ))
-        const startAccountCreationStep = new tasks.LambdaInvoke(this, 'StartAccountCreationStep', {
-            lambdaFunction: startAccountCreationFunction,
-        });
-
-        const stateMachine = new sfn.StateMachine(
-            this,
-            'StateMachine',
-            {
-                definition: genIdStep
-                    .next(writeAccountDataStep)
-                    .next(submitAccountStep)
-                    .next(startAccountCreationStep)
-                ,
-                stateMachineType: sfn.StateMachineType.EXPRESS,
-            }
-        )
-
 
         const api = new httpapi.HttpApi(this, "OrgVendingApi");
 
@@ -120,6 +74,26 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 actions: ['dynamodb:*'], // TODO: least privilege
             }
         ));
+
+        const vendNewAccountsFunction = new lambda.NodejsFunction(this, 'VendNewAccountsFunction', {
+            entry: 'code/vend-new-accounts.ts',
+            environment: {
+                QUEUE_URL: accountCreationQueue.queueUrl,
+            }
+        });
+        vendNewAccountsFunction.addToRolePolicy(new PolicyStatement(
+            {
+                resources: ['*'],
+                actions: ['dynamodb:*', 'states:*', 'sqs:sendMessage'], // TODO: least privilege
+            }
+        ));
+        new events.Rule(this, 'Rule', {
+            schedule: events.Schedule.expression('rate(1 hour)'),
+            targets: [
+                new targets.LambdaFunction(vendNewAccountsFunction)
+            ]
+        });
+
         api.addRoutes({
             path: '/vend',
             methods: [ httpapi.HttpMethod.GET ],

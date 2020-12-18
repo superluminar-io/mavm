@@ -14,6 +14,19 @@ exports.handler = async (event: any, context: any, callback: any) => {
         }
     ).promise();
 
+    if (accounts['Items'].length === 0) {
+        return {
+            statusCode: '503',
+            body: JSON.stringify({
+                'errorMessage': 'vending machine out of AWS accounts, please try again later.'
+            }),
+            isBase64Encoded: false,
+            headers: {
+                "Content-Type": "application/json"
+            }
+        }
+    }
+
     const account: any = accounts['Items'][0];
     const accountName = account['account_name'];
     const accountId = account['account_id'];
