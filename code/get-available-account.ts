@@ -49,6 +49,6 @@ exports.handler = async (event: any, context: any, callback: any) => {
 
     return {
         'account_id': accountId,
-        'cross_account_role': util.format('arn:....%s...', accountId),
+        'cross_account_role': util.format('arn:aws:iam::%s:role/OVMCrossAccountRole', accountId),
     };
 }
