@@ -207,7 +207,21 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
     await page.waitFor(8000);
 }
 
+async function activateBasicSupport(page) {
+    // select support plan, this activates the account
+    const basic_support_button = '#ng-app > div > div.main-content-new.ng-scope > div.ng-scope > div > div.form-content-box > div.select-plan-big-box.awsui-grid.awsui-container > div:nth-child(1) > div:nth-child(1) > div.awsui-row > div.c-xxs-12.plan-click-box > button > span > input';
+    await page.waitForSelector(basic_support_button, 10000);
+    await page.click(basic_support_button);
+}
+
 async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
+
+    await page.waitFor(10000); // wait for redirects to finish
+    if (page.mainFrame().url().split("#").pop() === "/support") {
+        await activateBasicSupport(page);
+        return;
+    }
+
     await page.waitForSelector('#ng-app > div > div.main-content-new.ng-scope > div.ng-scope > div > div.form-box > div.form-content-box > div.form-big-box.ng-pristine.ng-invalid.ng-invalid-required.ng-valid-pattern.ng-valid-phone-length-limit.ng-valid-maxlength > div.contact-form-box > div:nth-child(1) > div > label:nth-child(2) > input', {timeout: 5000});
     await page.$eval('#ng-app > div > div.main-content-new.ng-scope > div.ng-scope > div > div.form-box > div.form-content-box > div.form-big-box.ng-pristine.ng-invalid.ng-invalid-required.ng-valid-pattern.ng-valid-phone-length-limit.ng-valid-maxlength > div.contact-form-box > div:nth-child(1) > div > label:nth-child(2) > input', elem => elem.click());
 
@@ -285,6 +299,8 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
     // wait for amazon connect to answer the call
     await page.waitFor(50000);
     await page.click('#verification-complete-button');
+
+    await activateBasicSupport(page);
 }
 
 async function saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage) {
