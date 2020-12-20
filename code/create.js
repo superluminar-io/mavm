@@ -209,9 +209,11 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
 
 async function activateBasicSupport(page) {
     // select support plan, this activates the account
-    const basic_support_button = '#ng-app > div > div.main-content-new.ng-scope > div.ng-scope > div > div.form-content-box > div.select-plan-big-box.awsui-grid.awsui-container > div:nth-child(1) > div:nth-child(1) > div.awsui-row > div.c-xxs-12.plan-click-box > button > span > input';
+    const basic_support_button = '#ng-app > div > div.main-content-new.ng-scope > div.ng-scope > div > div.form-content-box > div.select-plan-big-box.awsui-grid.awsui-container > div:nth-child(1) > div:nth-child(1) > div.awsui-row > div.c-xxs-12.plan-click-box > button';
     await page.waitForSelector(basic_support_button, 10000);
+    await page.waitFor(10000); // UI needs to settle before clicking is possible
     await page.click(basic_support_button);
+    await page.waitFor(5000);
 }
 
 async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
