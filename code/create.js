@@ -8,8 +8,8 @@ const fs = require('fs');
 const util = require('util');
 
 const CONNECT_SSM_PARAMETER = '/superwerker/tests/connect' // TODO: rename
-const PRINCIPAL = '824014778649';
-const QUEUE_URL = util.format('https://sqs.eu-west-1.amazonaws.com/%s/accountCreationQueue2', PRINCIPAL);
+const PRINCIPAL = process.env['PRINCIPAL'];
+const QUEUE_URL = process.env['QUEUE_URL'];
 
 exports.handler = async () => {
     return await signup();
@@ -26,7 +26,7 @@ const signup = async function () {
         ACCOUNT_EMAIL = process.env['ACCOUNT_EMAIL'];
     } else {
         sqsMessage = await sqs.receiveMessage({
-            QueueUrl: QUEUE_URL, // fixme: don't hardcode
+            QueueUrl: QUEUE_URL,
             MaxNumberOfMessages: 1,
             VisibilityTimeout: 300,
         }).promise();

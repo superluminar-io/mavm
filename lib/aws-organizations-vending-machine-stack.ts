@@ -16,6 +16,14 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
     constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
         super(scope, id, props);
 
+        const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
+            queueName: 'accountCreationQueue2', // TODO: don't hardcode once we can pass this via env to the canary
+            deadLetterQueue: {
+                queue: new sqs.Queue(this, 'AccountCreationDLQueue'),
+                maxReceiveCount: 5,
+            }
+        });
+
         const canary = new cws.Canary(this, 'CreateAccount', {
             runtime: new cws.Runtime('syn-nodejs-2.2'),
             test: cws.Test.custom({
@@ -35,6 +43,15 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             }
         ));
 
+        // work around https://github.com/aws/aws-cdk/pull/11865
+        const cfnCanary = canary.node.defaultChild as cws.CfnCanary;
+        cfnCanary.addOverride('Properties.RunConfig.EnvironmentVariables', {
+            "PRINCIPAL": process.env.CDK_DEFAULT_ACCOUNT,
+            "QUEUE_URL": accountCreationQueue.queueUrl,
+
+        });
+        cfnCanary.addOverride('Properties.RunConfig.TimeoutInSeconds', 600); // delete me after https://github.com/aws/aws-cdk/pull/11865 can be used
+
         const table = new dynamodb.Table(this, "AccountsTable", {
             tableName: 'account', // don't hardcode once env can be passed to canary
             partitionKey: {
@@ -49,14 +66,6 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 name: 'account_status',
                 type: dynamodb.AttributeType.STRING,
             },
-        });
-
-        const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
-            queueName: 'accountCreationQueue2', // TODO: don't hardcode once we can pass this via env to the canary
-            deadLetterQueue: {
-                queue: new sqs.Queue(this, 'AccountCreationDLQueue'),
-                maxReceiveCount: 5,
-            }
         });
 
         const api = new httpapi.HttpApi(this, "OrgVendingApi");
