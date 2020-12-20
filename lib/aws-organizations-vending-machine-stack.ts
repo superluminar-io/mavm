@@ -1,18 +1,14 @@
 import * as cdk from '@aws-cdk/core';
-import {CfnResource} from '@aws-cdk/core';
-import * as sfn from '@aws-cdk/aws-stepfunctions';
-import * as tasks from '@aws-cdk/aws-stepfunctions-tasks';
 import * as lambda from '@aws-cdk/aws-lambda-nodejs';
 import * as cws from '@aws-cdk/aws-synthetics';
 import * as sqs from '@aws-cdk/aws-sqs';
 import * as dynamodb from '@aws-cdk/aws-dynamodb';
-import {BillingMode, ProjectionType} from '@aws-cdk/aws-dynamodb';
 import * as httpapi from '@aws-cdk/aws-apigatewayv2';
 import * as httpapiint from '@aws-cdk/aws-apigatewayv2-integrations';
 import * as events from '@aws-cdk/aws-events';
 import * as targets from '@aws-cdk/aws-events-targets';
 
-import {PolicyStatement, Role, ServicePrincipal} from "@aws-cdk/aws-iam";
+import {PolicyStatement} from "@aws-cdk/aws-iam";
 import * as path from "path";
 import * as fs from "fs";
 
@@ -45,7 +41,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 name: 'account_name',
                 type: dynamodb.AttributeType.STRING,
             },
-            billingMode: BillingMode.PAY_PER_REQUEST,
+            billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         });
         table.addGlobalSecondaryIndex({
             indexName: "account_status",
