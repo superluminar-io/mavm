@@ -26,7 +26,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 code: cws.Code.fromInline(fs.readFileSync(path.join(__dirname, '../code/create.js'), {encoding: "utf-8"})),
                 handler: 'index.handler',
             }),
-            startAfterCreation: false,
+            startAfterCreation: true,
 
             // start it regularly, this actually fakes a "watchdog" / "angel" process which keeps account creation running
             schedule: cws.Schedule.expression('rate(1 hour)'),
