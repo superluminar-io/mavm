@@ -17,7 +17,6 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         super(scope, id, props);
 
         const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
-            queueName: 'accountCreationQueue2', // TODO: don't hardcode once we can pass this via env to the canary
             deadLetterQueue: {
                 queue: new sqs.Queue(this, 'AccountCreationDLQueue'),
                 maxReceiveCount: 5,
