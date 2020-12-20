@@ -29,7 +29,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             startAfterCreation: false,
 
             // start it regularly, this actually fakes a "watchdog" / "angel" process which keeps account creation running
-            schedule: cws.Schedule.expression('rate(10 minutes)'),
+            schedule: cws.Schedule.expression('rate(1 hour)'),
         });
 
         canary.role.addToPrincipalPolicy(new PolicyStatement(
