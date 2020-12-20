@@ -447,15 +447,4 @@ async function createCrossAccountRole(page, PRINCIPAL) {
     // click on "create role"
     await page.waitForSelector(selector, {timeout: 5000});
     await page.click(selector);
-
-    // set max session lifetime to 12 hours
-    await page.goto("https://console.aws.amazon.com/iam/home?#/roles/" + crossAccountRole);
-    await page.waitFor(2000);
-    await page.click('#iam-content > roleslist > parent-view > div.ng-scope > role-details > entity-exist > div:nth-child(2) > info-grid > div > div > div > info-item > div > div.info-grid-item-content.c-xs-9 > content > div > a');
-    await page.waitFor(2000);
-    await page.click('#iam-content > roleslist > parent-view > div.ng-scope > role-details > entity-exist > div:nth-child(2) > info-grid > div > div > div > info-item > div > div.info-grid-item-content.c-xs-9 > content > div > form > custom-select');
-    await page.waitFor(2000);
-    await page.click('#iam-content > roleslist > parent-view > div.ng-scope > role-details > entity-exist > div:nth-child(2) > info-grid > div > div > div > info-item > div > div.info-grid-item-content.c-xs-9 > content > div > form > custom-select > div > awsui-select > span > div > div > ul > li:nth-child(5)');
-    await page.waitFor(2000);
-    await page.click('#iam-content > roleslist > parent-view > div.ng-scope > role-details > entity-exist > div:nth-child(2) > info-grid > div > div > div > info-item > div > div.info-grid-item-content.c-xs-9 > content > div > form > div.awsui-util-f-l > awsui-button.save-button.max-session-duration-update-btn > button');
-    await page.waitFor(5000);}
+}
