@@ -21,7 +21,7 @@ exports.handler = async (event: any, context: any, callback: any) => {
 
     for (let i = 0; i < accounts_to_vend; ++i) {
         const random_suffix = uuidv4().split('-')[0];
-        const account_email = `superwerker-aws-test+${random_suffix}@superluminar.io`; // TODO: this has to be generated from a subdomain which is under control so we can close the account automatically
+        const account_email = `superwerker-aws-test+${random_suffix}@superluminar.io`;
         const account_name = util.format('ovm-%s', random_suffix);
 
         const account_to_create = {
