@@ -10,6 +10,8 @@ const util = require('util');
 const CONNECT_SSM_PARAMETER = '/superwerker/tests/connect' // TODO: rename
 const PRINCIPAL = process.env['PRINCIPAL'];
 const QUEUE_URL = process.env['QUEUE_URL'];
+const INVOICE_EMAIL = process.env['INVOICE_EMAIL'];
+const INVOICE_CURRENCY = process.env['INVOICE_CURRENCY'];
 
 exports.handler = async () => {
     return await signup();
@@ -65,6 +67,7 @@ const signup = async function () {
             await page.goto('https://portal.aws.amazon.com/billing/signup?type=resubscribe#/identityverification');
             await signupVerification(page, variables, ACCOUNT_NAME, ssm);
             await createCrossAccountRole(page, PRINCIPAL);
+            await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
             await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
         } catch (e) {
             console.log("retried signup, but got exception: " + e);
@@ -80,6 +83,8 @@ const signup = async function () {
         await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
 
         await createCrossAccountRole(page, PRINCIPAL);
+
+        await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
 
         await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
     }
@@ -447,4 +452,39 @@ async function createCrossAccountRole(page, PRINCIPAL) {
     // click on "create role"
     await page.waitForSelector(selector, {timeout: 5000});
     await page.click(selector);
+}
+
+async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
+    await page.goto('https://console.aws.amazon.com/billing/home?#/account');
+    await page.waitFor(3000);
+    await page.waitForSelector('#account__edit-currency-preference');
+    await page.click('#account__edit-currency-preference');
+
+    await page.waitForSelector('#account__select-currencies-list');
+    await page.waitFor(3000);
+    await page.select('#account__select-currencies-list', INVOICE_CURRENCY);
+
+    await page.waitFor(3000);
+    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(3) > div > div > div > div.account-information-update-buttons.margin-top-10 > button.btn.btn-primary');
+    await page.waitFor(3000);
+
+    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > a')
+    await page.waitFor(3000);
+    await page.type('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(1) > input', 'Bill Gates')
+    await page.waitFor(1000);
+    await page.type('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(2) > input', 'CFO')
+    await page.waitFor(1000);
+    await page.type('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(3) > input', INVOICE_EMAIL)
+    await page.waitFor(1000);
+    await page.type('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(4) > input', '+1234567890')
+    await page.waitFor(1000);
+    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div.account-information-update-buttons.margin-top-10.ng-scope > button.btn.btn-primary');
+    await page.waitFor(3000);
+
+    await page.goto('https://console.aws.amazon.com/billing/home?#/preferences');
+    await page.waitFor(3000);
+    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.plutonium.aws-billing-console-root.awsui-v1-root > div > div > div.aws-billing-console-span10 > div:nth-child(2) > div > label > span > i');
+    await page.waitFor(3000);
+    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.aws-billing-console-span10 > div.plutonium.aws-billing-console-root.awsui-v1-root > div > div > button');
+    await page.waitFor(3000);
 }

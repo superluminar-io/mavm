@@ -21,6 +21,14 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             description: "Number of AWS accounts to be made ready for vending.",
             default: 10
         });
+        const invoiceEmail = new cdk.CfnParameter(this, "InvoiceEmail", {
+            type: "String",
+            description: "email address to send invoices to.",
+        });
+        const invoiceCurrency = new cdk.CfnParameter(this, "InvoiceCurrency", {
+            type: "String",
+            description: "Currency for billing/invoice.",
+        });
 
         const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
             deadLetterQueue: {
@@ -53,6 +61,8 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         cfnCanary.addOverride('Properties.RunConfig.EnvironmentVariables', {
             "PRINCIPAL": process.env.CDK_DEFAULT_ACCOUNT,
             "QUEUE_URL": accountCreationQueue.queueUrl,
+            INVOICE_CURRENCY: invoiceCurrency.valueAsString,
+            INVOICE_EMAIL: invoiceEmail.valueAsString,
 
         });
         cfnCanary.addOverride('Properties.RunConfig.TimeoutInSeconds', 600); // delete me after https://github.com/aws/aws-cdk/pull/11865 can be used
