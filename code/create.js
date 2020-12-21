@@ -436,22 +436,23 @@ async function createCrossAccountRole(page, PRINCIPAL) {
 
     await page.waitForSelector(selector, {timeout: 5000});
     await page.click(selector);
-    await page.waitFor(1000);
+    await page.waitFor(5000);
 
     await page.waitForSelector(selector, {timeout: 5000});
     await page.click(selector);
-    await page.waitFor(1000);
+    await page.waitFor(5000);
 
     await page.waitForSelector(selector, {timeout: 5000});
     await page.click(selector);
-    await page.waitFor(1000);
+    await page.waitFor(5000);
 
     await page.type('#awsui-textfield-13', crossAccountRole, {delay: 100});
-    await page.waitFor(3000);
+    await page.waitFor(5000);
 
     // click on "create role"
     await page.waitForSelector(selector, {timeout: 5000});
     await page.click(selector);
+    await page.waitFor(5000);
 }
 
 async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
