@@ -16,6 +16,12 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
     constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
         super(scope, id, props);
 
+        const vendingCeiling = new cdk.CfnParameter(this, "VendingCeiling", {
+            type: "String",
+            description: "Number of AWS accounts to be made ready for vending.",
+            default: 10
+        });
+
         const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
             deadLetterQueue: {
                 queue: new sqs.Queue(this, 'AccountCreationDLQueue'),
@@ -83,6 +89,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             entry: 'code/vend-new-accounts.ts',
             environment: {
                 QUEUE_URL: accountCreationQueue.queueUrl,
+                VENDING_CEILING: vendingCeiling.valueAsString,
             }
         });
         vendNewAccountsFunction.addToRolePolicy(new PolicyStatement(
@@ -92,7 +99,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             }
         ));
         new events.Rule(this, 'Rule', {
-            schedule: events.Schedule.expression('rate(1 hour)'),
+            schedule: events.Schedule.expression('rate(' + vendingCeiling.valueAsString + ' hours)'),
             targets: [
                 new targets.LambdaFunction(vendNewAccountsFunction)
             ]

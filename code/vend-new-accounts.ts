@@ -16,7 +16,7 @@ exports.handler = async (event: any, context: any, callback: any) => {
         }
     ).promise();
 
-    const vending_ceiling = 10;
+    const vending_ceiling = parseInt(<string>process.env['VENDING_CEILING']);
     let accounts_to_vend = vending_ceiling - accounts['Count'];
 
     for (let i = 0; i < accounts_to_vend; ++i) {
