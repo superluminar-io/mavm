@@ -1,4 +1,5 @@
 import * as cdk from '@aws-cdk/core';
+import * as lambda_core from '@aws-cdk/aws-lambda';
 import * as lambda from '@aws-cdk/aws-lambda-nodejs';
 import * as cws from '@aws-cdk/aws-synthetics';
 import * as sqs from '@aws-cdk/aws-sqs';
@@ -7,6 +8,10 @@ import * as httpapi from '@aws-cdk/aws-apigatewayv2';
 import * as httpapiint from '@aws-cdk/aws-apigatewayv2-integrations';
 import * as events from '@aws-cdk/aws-events';
 import * as targets from '@aws-cdk/aws-events-targets';
+import * as lambdaeventsources from '@aws-cdk/aws-lambda-event-sources';
+import * as sfn from '@aws-cdk/aws-stepfunctions';
+import * as tasks from '@aws-cdk/aws-stepfunctions-tasks';
+
 
 import {PolicyStatement} from "@aws-cdk/aws-iam";
 import * as path from "path";
@@ -74,6 +79,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 type: dynamodb.AttributeType.STRING,
             },
             billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+            stream: dynamodb.StreamViewType.NEW_IMAGE,
         });
         table.addGlobalSecondaryIndex({
             indexName: "account_status",
@@ -122,5 +128,73 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 handler: getAvailableAccountFunction,
             }),
         });
+
+        const accountDeletionQueue = new sqs.Queue(this, 'AccountDeletionQueue', {
+            deadLetterQueue: {
+                queue: new sqs.Queue(this, 'AccountDeletionDLQueue'),
+                maxReceiveCount: 5,
+            }
+        });
+
+        const accountDeletionFunction = new cws.Canary(this, 'AccountDeletionFunction', {
+            runtime: new cws.Runtime('syn-nodejs-2.2'),
+            test: cws.Test.custom({
+                code: cws.Code.fromInline(fs.readFileSync(path.join(__dirname, '../code/close-account.js'), {encoding: "utf-8"})),
+                handler: 'index.handler',
+            }),
+            startAfterCreation: true,
+
+            // start it regularly, this actually fakes a "watchdog" / "angel" process which keeps account creation running
+            schedule: cws.Schedule.expression('rate(1 hour)'),
+        });
+        accountDeletionFunction.role.addToPrincipalPolicy(new PolicyStatement(
+            {
+                resources: ['*'],
+                actions: ['secretsmanager:GetSecretValue', 'dynamodb:*', 'sqs:*'], // TODO: least privilege
+            }
+        ));
+        // work around https://github.com/aws/aws-cdk/pull/11865
+        const cfnAccountDeletionFunction = accountDeletionFunction.node.defaultChild as cws.CfnCanary;
+        cfnAccountDeletionFunction.addOverride('Properties.RunConfig.EnvironmentVariables', {
+            QUEUE_URL: accountDeletionQueue.queueUrl,
+
+        });
+        cfnAccountDeletionFunction.addOverride('Properties.RunConfig.TimeoutInSeconds', 600); // delete me after https://github.com/aws/aws-cdk/pull/11865 can be used
+
+        const waitStep = new sfn.Wait(this, 'WaitForAccountDeletion', {
+            time: sfn.WaitTime.duration(cdk.Duration.days(1)) // close vended account after one day
+        });
+        const queueAccountDeletionStep = new tasks.SqsSendMessage(this, 'QueueAccountDeletionStep', {
+            messageBody: sfn.TaskInput.fromDataAt('$'),
+            queue: accountDeletionQueue,
+        });
+
+        const accountDeletionStateMachine = new sfn.StateMachine(
+            this,
+            'AccountDeletionStateMachine',
+            {
+                definition: waitStep
+                    .next(queueAccountDeletionStep)
+                ,
+            }
+        );
+
+        const queueAccountDeletionFunction = new lambda.NodejsFunction(this, 'QueueActionDeletionFunction', {
+            entry: 'code/queue-account-deletion.ts',
+            environment: {
+                ACCOUNT_CLOSE_STATE_MACHINE_ARN: accountDeletionStateMachine.stateMachineArn
+            }
+        });
+        queueAccountDeletionFunction.addToRolePolicy(new PolicyStatement(
+            {
+                resources: ['*'],
+                actions: ['states:*'], // TODO: least privilege
+            }
+        ));
+        queueAccountDeletionFunction.addEventSource(new lambdaeventsources.DynamoEventSource(table, {
+            startingPosition: lambda_core.StartingPosition.TRIM_HORIZON,
+        }));
+
+
     }
 }
