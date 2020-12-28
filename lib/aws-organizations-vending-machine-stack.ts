@@ -64,8 +64,8 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         // work around https://github.com/aws/aws-cdk/pull/11865
         const cfnCanary = canary.node.defaultChild as cws.CfnCanary;
         cfnCanary.addOverride('Properties.RunConfig.EnvironmentVariables', {
-            "PRINCIPAL": process.env.CDK_DEFAULT_ACCOUNT,
-            "QUEUE_URL": accountCreationQueue.queueUrl,
+            PRINCIPAL: process.env.CDK_DEFAULT_ACCOUNT,
+            QUEUE_URL: accountCreationQueue.queueUrl,
             INVOICE_CURRENCY: invoiceCurrency.valueAsString,
             INVOICE_EMAIL: invoiceEmail.valueAsString,
 
