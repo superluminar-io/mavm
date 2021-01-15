@@ -74,6 +74,10 @@ const closeAccountHandler = async function () {
         await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
     });
 
+    await synthetics.executeStep('enableTaxInheritance', async function () {
+        await enableTaxInheritance(page, secretdata);
+    });
+
     await synthetics.executeStep('closeAccount', async function () {
         await closeAccount(page);
     });
@@ -105,6 +109,56 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
 
     await page.click('#signin_button');
     await page.waitFor(8000);
+}
+
+async function enableTaxInheritance(page, secretdata) {
+    await page.goto('https://console.aws.amazon.com/billing/home?#/tax', {
+        timeout: 0,
+        waitUntil: ['domcontentloaded', 'networkidle0']
+    });
+
+    try {
+        await page.waitForSelector('#awsui-checkbox-7', {timeout: 5000});
+    } catch (e) {
+        // no tax inheritance, apparently because there are no sub-accounts
+        return;
+    }
+
+    // click the first account in list
+    await page.click('#awsui-checkbox-7');
+    await page.waitFor(1000);
+
+    // click edit
+    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > div:nth-child(2) > div:nth-child(1) > awsui-button-dropdown > div > button')
+    await page.waitFor(1000);
+    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > div:nth-child(2) > div:nth-child(1) > awsui-button-dropdown > div > div > ul > li:nth-child(1) > a')
+    await page.waitFor(1000);
+
+    // country "select" box
+    const country_selector = '#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > awsui-modal:nth-child(6) > div.awsui-modal-__state-showing.awsui-modal-container > div > div > div.awsui-modal-body > div > span > form > awsui-control-group:nth-child(2) > div > div > div.awsui-control-group-control > span > awsui-select > span > span';
+    await page.click(country_selector)
+    await page.waitFor(1000);
+    await page.type(country_selector, secretdata.country)
+    await page.waitFor(1000);
+    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > awsui-modal:nth-child(6) > div.awsui-modal-__state-showing.awsui-modal-container > div > div > div.awsui-modal-body > div > span > form > awsui-control-group:nth-child(2) > div > div > div.awsui-control-group-control > span > awsui-select > span > div > div > ul > li.awsui-select-option.awsui-select-option-highlight')
+    await page.waitFor(1000);
+
+    // tax id
+    await page.type('#awsui-textfield-1', secretdata.vatid)
+    await page.waitFor(1000);
+
+    // legal entity
+    await page.type('#awsui-textfield-2', secretdata.company)
+    await page.waitFor(1000);
+
+    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > awsui-modal:nth-child(6) > div.awsui-modal-__state-showing.awsui-modal-container > div > div > div.awsui-modal-footer > div > span > awsui-button:nth-child(1) > button')
+    await page.waitFor(5000);
+
+    await page.click('#heritageCheckbox > label > div')
+    await page.waitFor(1000);
+
+    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > awsui-modal:nth-child(7) > div.awsui-modal-__state-showing.awsui-modal-container > div > div > div.awsui-modal-footer > div > span > awsui-button:nth-child(1) > button')
+    await page.waitFor(5000);
 }
 
 
