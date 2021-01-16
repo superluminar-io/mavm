@@ -28,14 +28,33 @@ async function closeAccount(page) {
 
     await page.click('.btn-danger'); // close account button
 
-    await page.waitFor(1000);
+    account_closed = false;
+    const confirm_close_account = '.modal-footer > button.btn-danger';
+    try {
+        await page.waitForSelector(account_closed, {timeout: 1000});
+    } catch (e) {
+        // account apparently already closed
+        account_closed = true;
+    }
 
-    await page.click('.modal-footer > button.btn-danger'); // confirm close account button
+    if (!account_closed) {
+        await page.click(confirm_close_account); // confirm close account button
+        // "Account has been closed" box
+        await page.waitForSelector('#billing-console-root > div > div > div.root--3xRQC.awsui > div > div > div > div.text--37m-5' , {timeout: 5000});
+    }
 
+    // wait for AWS to close the account
+    await page.waitFor(30000);
+
+    // check on EC2 page whether account has really been closed
+    await page.goto('https://eu-west-1.console.aws.amazon.com/ec2/v2/home?region=eu-west-1#Home:', {
+        timeout: 0,
+        waitUntil: ['domcontentloaded']
+    });
     await page.waitFor(5000);
-
-    // "Account has been closed" box
-    await page.waitForSelector('#billing-console-root > div > div > div.root--3xRQC.awsui > div > div > div > div.text--37m-5', 10000);
+    await page.waitForFunction(
+        'document.querySelector("body").innerText.includes("Authentication failed because your account has been suspended.")', {timeout: 1000}
+    );
 }
 
 const closeAccountHandler = async function () {
