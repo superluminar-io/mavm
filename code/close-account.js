@@ -31,7 +31,7 @@ async function closeAccount(page) {
     account_closed = false;
     const confirm_close_account = '.modal-footer > button.btn-danger';
     try {
-        await page.waitForSelector(account_closed, {timeout: 1000});
+        await page.waitForSelector(confirm_close_account, {timeout: 1000});
     } catch (e) {
         // account apparently already closed
         account_closed = true;
