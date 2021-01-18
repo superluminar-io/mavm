@@ -33,7 +33,7 @@ async function closeAccount(page) {
     try {
         await page.waitForSelector(confirm_close_account, {timeout: 1000});
     } catch (e) {
-        // account apparently already closed
+        console.log('account apparently already closed');
         account_closed = true;
     }
 
