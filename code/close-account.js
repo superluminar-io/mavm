@@ -44,7 +44,7 @@ async function closeAccount(page) {
     }
 
     // wait for AWS to close the account
-    await page.waitFor(30000);
+    await page.waitFor(60000);
 
     // check on EC2 page whether account has really been closed
     await page.goto('https://eu-west-1.console.aws.amazon.com/ec2/v2/home?region=eu-west-1#Home:', {
