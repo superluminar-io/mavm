@@ -137,9 +137,15 @@ async function enableTaxInheritance(page, secretdata) {
     });
 
     try {
-        await page.waitForSelector('#awsui-checkbox-7', {timeout: 5000});
+        await page.waitForSelector('#heritageCheckbox input', {timeout: 5000});
     } catch (e) {
-        // no tax inheritance, apparently because there are no sub-accounts
+        console.log('no tax inheritance, apparently because there are no sub-accounts');
+        return;
+    }
+
+    const taxInheritanceEnabled = await page.$eval('#heritageCheckbox input', check => { return check.checked});
+    if (taxInheritanceEnabled) {
+        console.log('tax inheritance already enabled');
         return;
     }
 
