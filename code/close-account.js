@@ -94,7 +94,7 @@ const closeAccountHandler = async function () {
     });
 
     await synthetics.executeStep('enableTaxInheritance', async function () {
-        await enableTaxInheritance(page, secretdata);
+        await enableTaxInheritance(page, secretdata, ACCOUNT_NAME);
     });
 
     await synthetics.executeStep('closeAccount', async function () {
@@ -130,27 +130,15 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
     await page.waitFor(8000);
 }
 
-async function enableTaxInheritance(page, secretdata) {
+async function enableTaxInheritance(page, secretdata, ACCOUNT_NAME) {
     await page.goto('https://console.aws.amazon.com/billing/home?#/tax', {
         timeout: 0,
         waitUntil: ['domcontentloaded', 'networkidle0']
     });
 
-    try {
-        await page.waitForSelector('#heritageCheckbox input', {timeout: 5000});
-    } catch (e) {
-        console.log('no tax inheritance, apparently because there are no sub-accounts');
-        return;
-    }
-
-    const taxInheritanceEnabled = await page.$eval('#heritageCheckbox input', check => { return check.checked});
-    if (taxInheritanceEnabled) {
-        console.log('tax inheritance already enabled');
-        return;
-    }
-
-    // click the first account in list
-    await page.click('#awsui-checkbox-7');
+    // edit the management account
+    const managementAccountCheckbox = await page.$x('//div[@class="tax-table-cell ng-binding" and text()="' + ACCOUNT_NAME + '"]/preceding-sibling::div//input[@type="checkbox"]')
+    await managementAccountCheckbox[0].click();
     await page.waitFor(1000);
 
     // click edit
@@ -179,11 +167,23 @@ async function enableTaxInheritance(page, secretdata) {
     await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > awsui-modal:nth-child(6) > div.awsui-modal-__state-showing.awsui-modal-container > div > div > div.awsui-modal-footer > div > span > awsui-button:nth-child(1) > button')
     await page.waitFor(5000);
 
-    await page.click('#heritageCheckbox > label > div')
-    await page.waitFor(1000);
+    try {
+        await page.waitForSelector('#heritageCheckbox input', {timeout: 5000});
 
-    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > awsui-modal:nth-child(7) > div.awsui-modal-__state-showing.awsui-modal-container > div > div > div.awsui-modal-footer > div > span > awsui-button:nth-child(1) > button')
-    await page.waitFor(5000);
+        const taxInheritanceEnabled = await page.$eval('#heritageCheckbox input', check => { return check.checked});
+        if (taxInheritanceEnabled) {
+            console.log('tax inheritance already enabled');
+            return;
+        }
+
+        await page.click('#heritageCheckbox > label > div')
+        await page.waitFor(1000);
+
+        await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > awsui-modal:nth-child(7) > div.awsui-modal-__state-showing.awsui-modal-container > div > div > div.awsui-modal-footer > div > span > awsui-button:nth-child(1) > button')
+        await page.waitFor(5000);
+    } catch (e) {
+        console.log('no tax inheritance, apparently because there are no sub-accounts');
+    }
 }
 
 
