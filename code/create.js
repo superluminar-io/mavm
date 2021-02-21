@@ -212,15 +212,6 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
     await page.waitFor(8000);
 }
 
-async function activateBasicSupport(page) {
-    // select support plan, this activates the account
-    const basic_support_button = '#ng-app > div > div.main-content-new.ng-scope > div.ng-scope > div > div.form-content-box > div.select-plan-big-box.awsui-grid.awsui-container > div:nth-child(1) > div:nth-child(1) > div.awsui-row > div.c-xxs-12.plan-click-box > button';
-    await page.waitForSelector(basic_support_button, 10000);
-    await page.waitFor(10000); // UI needs to settle before clicking is possible
-    await page.click(basic_support_button);
-    await page.waitFor(5000);
-}
-
 async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
 
     await page.waitFor(10000); // wait for redirects to finish
@@ -229,65 +220,63 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
         return;
     }
 
-    await page.waitForSelector('#ng-app > div > div.main-content-new.ng-scope > div.ng-scope > div > div.form-box > div.form-content-box > div.form-big-box.ng-pristine.ng-invalid.ng-invalid-required.ng-valid-pattern.ng-valid-phone-length-limit.ng-valid-maxlength > div.contact-form-box > div:nth-child(1) > div > label:nth-child(2) > input', {timeout: 5000});
-    await page.$eval('#ng-app > div > div.main-content-new.ng-scope > div.ng-scope > div > div.form-box > div.form-content-box > div.form-big-box.ng-pristine.ng-invalid.ng-invalid-required.ng-valid-pattern.ng-valid-phone-length-limit.ng-valid-maxlength > div.contact-form-box > div:nth-child(1) > div > label:nth-child(2) > input', elem => elem.click());
+    await page.click('input[name="divaMethod"][value="Phone"]:first-child');
+    await page.waitFor(1000);
 
-    let usoption = await page.$('option[label="United States (+1)"]');
-    let usvalue = await page.evaluate((obj) => {
-        return obj.getAttribute('value');
-    }, usoption);
-
-    await page.select('#countryCode', usvalue);
-
-
-    let portalphonenumber = await page.$('#phoneNumber');
+    let portalphonenumber = await page.$('input[name="phoneNumber"]:first-child');
     await portalphonenumber.press('Backspace');
     await portalphonenumber.type(variables['PHONE_NUMBER'].replace("+1", ""), {delay: 100});
     var phonecode = "";
     var phonecodetext = "";
 
-    await page.click('#switchToAudioBtn');
-
-    await page.waitForSelector('#audioPlayBtn')
-    await page.click('#audioPlayBtn')
-
     var captchanotdone = true;
     var captchaattemptsfordiva = 0;
     while (captchanotdone) {
         captchaattemptsfordiva += 1;
-        if (captchaattemptsfordiva > 5) {
+        if (captchaattemptsfordiva > 10) {
             throw "Could not confirm phone number verification - possible error in DIVA system or credit card";
         }
         try {
-            await page.waitForSelector('#refreshAudioBtn')
-            await page.click('#refreshAudioBtn')
 
-            await page.waitFor(2000);
-            await page.waitForSelector('#audioCaptcha')
-            let audioCaptcha = await page.$('#audioCaptcha');
-            let audioCaptchaUrl = await page.evaluate((audioCaptcha) => {
-                return audioCaptcha.getAttribute('src');
-            }, audioCaptcha);
+            const captchaResponse = page.waitForResponse((response) => {
+                return response.url().startsWith("https://opfcaptcha-prod.s3.amazonaws.com/")
+            });
+
+            await page.waitForSelector('img[alt="Change to audio security check"]:first-child');
+            await page.click('img[alt="Change to audio security check"]:first-child');
+            await page.waitFor(1000);
+
+            await page.waitForSelector('span[aria-label="Play Audio"]')
+            await page.click('span[aria-label="Play Audio"]')
+
+            await page.waitFor(1000);
+
+            const audioCaptchaUrl = (await captchaResponse).url();
+            console.log('Audio captcha URL:', audioCaptchaUrl);
 
             let solvedAudioCaptcha = await solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME);
 
-            let input32 = await page.$('#guess');
+            let input32 = await page.$('input[name="captchaGuess"]:first-child');
             await input32.press('Backspace');
             await input32.type(solvedAudioCaptcha, {delay: 100});
+            await page.waitFor(1000);
 
-            let submitc = await page.$('#btnCall');
+            let submitc = await page.$('#IdentityVerification > fieldset > awsui-button > button');
             await submitc.click();
-            await page.waitFor(5000);
 
-            await page.waitForSelector('.phone-pin-number', {timeout: 5000});
+            try {
+                await page.waitForSelector('#phonePin', {timeout: 5000});
+                phonecode = await page.$('#phonePin');
+                phonecodetext = await page.evaluate(el => el.textContent, phonecode);
 
-            phonecode = await page.$('.phone-pin-number > span');
-            phonecodetext = await page.evaluate(el => el.textContent, phonecode);
-
-            if (phonecodetext.trim().length == 4) {
-                captchanotdone = false;
-            } else {
-                await page.waitFor(5000);
+                if (phonecodetext.trim().length == 4) {
+                    captchanotdone = false;
+                } else {
+                    await page.waitFor(5000);
+                }
+            } catch (error) {
+                console.log('captcha probably not done, continue', error)
+                LOG.info(error);
             }
         } catch (error) {
             LOG.error(error);
@@ -304,10 +293,11 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
     }).promise();
 
     // wait for amazon connect to answer the call
-    await page.waitFor(50000);
-    await page.click('#verification-complete-button');
+    await page.waitForSelector('#SupportPlan > fieldset > div.CenteredButton_centeredButtonContainer_3Xaah > awsui-button > button', {timeout: 120000});
+    await page.click('#SupportPlan > fieldset > div.CenteredButton_centeredButtonContainer_3Xaah > awsui-button > button');
 
-    await activateBasicSupport(page);
+    // "Go to the AWS Management Console" selector
+    await page.waitForSelector('#aws-signup-app > div > div.App_content_5H0by > div > div > div:nth-child(5) > awsui-button > a')
 }
 
 async function saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage) {
@@ -352,17 +342,23 @@ async function saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage) {
 
 async function signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME) {
     await page.goto('https://portal.aws.amazon.com/billing/signup#/start')
-    await page.waitForSelector('#ccEmail', {timeout: 15000});
-    await page.type('#ccEmail', ACCOUNT_EMAIL);
+    await page.waitForSelector('#awsui-input-0', {timeout: 15000});
+
+    // remove cookie banner so that it's possible to click on the submit button later, otherwise the UI thinks the button cannot be clicked
+    await page.$eval('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary', e => e.click());
+    await page.waitFor(5000);
+
+    await page.type('#awsui-input-0', ACCOUNT_EMAIL);
     await page.waitFor(1000);
-    await page.type('#ccPassword', secretdata.password);
+    await page.type('#awsui-input-1', secretdata.password);
     await page.waitFor(1000);
-    await page.type('#ccRePassword', secretdata.password);
+    await page.type('#awsui-input-2', secretdata.password);
     await page.waitFor(1000);
-    await page.type('#ccUserName', ACCOUNT_NAME);
+    await page.type('#awsui-input-3', ACCOUNT_NAME);
+
     await page.waitFor(1000);
 
-    await page.click('#cc-form-box > div.cc-form-big-box > div > div.cc-form-submit-click-box > button > span > input');
+    await page.click('#CredentialCollection button:first-child');
 
     try {
         await page.waitForSelector('#switchToAudioBtn', {visible: true, timeout: 5000});
@@ -422,59 +418,82 @@ async function signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME) {
 }
 
 async function signupPageTwo(page, secretdata, variables) {
-    await page.waitForSelector('#full-name', {timeout: 5000});
 
-    await page.type('#company', secretdata.company, {delay: 100});
+    await page.waitForSelector('#awsui-radio-button-1', {timeout: 5000});
+    await page.click('#awsui-radio-button-1')
     await page.waitFor(1000);
 
-    await page.type('#phone-number', variables['PHONE_NUMBER'], {delay: 100});
+    await page.type('input[name="address.fullName"]:first-child', secretdata.company);
     await page.waitFor(1000);
 
-    await page.type('#postal-code', secretdata.postalcode, {delay: 100});
+    await page.type('input[name="address.company"]:first-child', secretdata.company);
+    await page.waitFor(1000);
+
+    await page.type('input[name="address.phoneNumber"]:first-child', variables['PHONE_NUMBER'].replace('+1', '+1 '));
+    await page.waitFor(1000);
+
+    await page.click('#awsui-select-1 > div > awsui-icon > span'); // click country selection
     await page.waitFor(1000);
 
     const option = (await page.$x(
-        '//*[@id = "country"]/option[text() = "' + secretdata.country + '"]'
+        '//*[@id = "awsui-select-1-dropdown-options"]//span[text() = "' + secretdata.country + '"]'
     ))[0];
-    const value = await (await option.getProperty('value')).jsonValue();
-    await page.select('#country', value);
-
-    await page.type('#street-address-1', secretdata.streetaddress, {delay: 100});
+    await option.click();
     await page.waitFor(1000);
 
-    await page.type('#city', secretdata.city, {delay: 100});
+    await page.type('input[name="address.addressLine1"]:first-child', secretdata.streetaddress);
     await page.waitFor(1000);
 
-    await page.type('#state', secretdata.state, {delay: 100});
+    await page.type('input[name="address.city"]:first-child', secretdata.city);
     await page.waitFor(1000);
 
-    await page.click('div.agreement-checkbox > input')
+    await page.type('input[name="address.state"]:first-child', secretdata.state);
     await page.waitFor(1000);
 
-    await page.click('div.form-submit-click-box > button > span > input')
+    await page.type('input[name="address.postalCode"]:first-child', secretdata.postalcode);
+    await page.waitFor(1000);
+
+    await page.click('input[name="agreement"]:first-child');
+    await page.waitFor(1000);
+
+    await page.click('#ContactInformation > fieldset > awsui-button > button')
     await page.waitFor(1000);
 }
 
 async function signupCreditCard(page, secretdata) {
-    let input5 = await page.$('#credit-card-number');
+    await page.waitForSelector('input[name="cardNumber"]:first-child');
+
+    let input5 = await page.$('input[name="cardNumber"]:first-child');
     await input5.press('Backspace');
     await input5.type(secretdata.ccnumber, {delay: 100});
+    await page.waitFor(1000);
 
-    await page.select('#expirationMonth', (parseInt(secretdata.ccmonth) - 1).toString());
+    await page.click('#awsui-select-2 > div > awsui-icon > span'); // click month selection
+    await page.waitFor(1000);
 
-    await page.waitFor(2000);
+    const ccExpireDate = new Date(secretdata.ccyear, secretdata.ccmonth - 1, 1);
+    const ccExpireMonthName = ccExpireDate.toLocaleString('default', { month: 'long' });
 
-    let currentyear = new Date().getFullYear();
+    await (await page.$x(
+        '//*[@id = "awsui-select-2-dropdown-options"]//span[text() = "' + ccExpireMonthName + '"]'
+    ))[0].click();
+    await page.waitFor(1000);
 
-    await page.select('select[name=\'expirationYear\']', (parseInt(secretdata.ccyear) - currentyear).toString());
+    await page.click('#awsui-select-3 > div > awsui-icon > span'); // click month selection
+    await page.waitFor(1000);
 
-    let input6 = await page.$('#accountHolderName');
+    await (await page.$x(
+        '//*[@id = "awsui-select-3-dropdown-options"]//span[text() = "' + secretdata.ccyear + '"]'
+    ))[0].click();
+    await page.waitFor(1000);
+
+    let input6 = await page.$('input[name="accountHolderName"]:first-child');
     await input6.press('Backspace');
     await input6.type(secretdata.ccname, {delay: 100});
-
     await page.waitFor(2000);
 
-    await page.click('.form-submit-click-box > button');
+    await page.click('#PaymentInformation > fieldset > awsui-button > button')
+    await page.waitFor(1000);
 }
 
 async function createCrossAccountRole(page, PRINCIPAL) {
