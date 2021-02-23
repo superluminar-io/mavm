@@ -59,35 +59,19 @@ const signup = async function () {
     let page = await synthetics.getPage();
     await signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME);
 
-    try {
-        await page.waitForSelector('#ng-app > div > div.main-content-new.ng-scope > div.header-error-msg-bar.ng-scope > div > div.header-error-msg-text > p > span > span', {timeout: 5000});
-        try {
-            console.log("account already registered, log in");
-            await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
-            await page.goto('https://portal.aws.amazon.com/billing/signup?type=resubscribe#/identityverification');
-            await signupVerification(page, variables, ACCOUNT_NAME, ssm);
-            await createCrossAccountRole(page, PRINCIPAL);
-            await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
-            await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
-        } catch (e) {
-            console.log("retried signup, but got exception: " + e);
-        }
-    } catch (e) {
-        // continue with usual signup
-        await signupPageTwo(page, secretdata, variables);
+    await signupPageTwo(page, secretdata, variables);
 
-        await signupCreditCard(page, secretdata);
+    await signupCreditCard(page, secretdata);
 
-        await signupVerification(page, variables, ACCOUNT_NAME, ssm);
+    await signupVerification(page, variables, ACCOUNT_NAME, ssm);
 
-        await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
+    await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
 
-        await createCrossAccountRole(page, PRINCIPAL);
+    await createCrossAccountRole(page, PRINCIPAL);
 
-        await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
+    await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
 
-        await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
-    }
+    await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
 };
 
 const httpGet = url => {
@@ -359,62 +343,6 @@ async function signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME) {
     await page.waitFor(1000);
 
     await page.click('#CredentialCollection button:first-child');
-
-    try {
-        await page.waitForSelector('#switchToAudioBtn', {visible: true, timeout: 5000});
-    } catch (e) {
-        return
-    }
-    // ran into captcha pre-check
-    await page.click('#switchToAudioBtn');
-
-    await page.waitForSelector('#audioPlayBtn')
-    await page.click('#audioPlayBtn')
-
-    var captchaDone = false;
-    var captchaattemptsfordiva = 0;
-    while (!captchaDone) {
-        captchaattemptsfordiva += 1;
-        if (captchaattemptsfordiva > 5) {
-            throw "Could not confirm phone number verification - possible error in DIVA system or credit card";
-        }
-        try {
-            await page.waitForSelector('#refreshAudioBtn')
-            await page.click('#refreshAudioBtn')
-
-            await page.waitFor(2000);
-            await page.waitForSelector('#audioCaptcha')
-            let audioCaptcha = await page.$('#audioCaptcha');
-            let audioCaptchaUrl = await page.evaluate((audioCaptcha) => {
-                return audioCaptcha.getAttribute('src');
-            }, audioCaptcha);
-
-            let solvedAudioCaptcha = await solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME);
-
-            let input32 = await page.$('#guess');
-            await input32.press('Backspace');
-            await input32.type(solvedAudioCaptcha, {delay: 100});
-
-            let submitc = await page.$('#a-autoid-1');
-            await submitc.click();
-            await page.waitFor(5000);
-
-            const audioCaptchaErrorMessageSelector = '#ng-app > div > div.main-content-new.ng-scope > div.header-error-msg-bar.ng-scope > div > div.header-error-msg-text > p > span > span';
-            let audioCaptchaErrorMessageVisible = false;
-            if (await page.$(audioCaptchaErrorMessageSelector) !== null) {
-                audioCaptchaErrorMessageVisible = await page.$eval(audioCaptchaErrorMessageSelector, (element) => {
-                    return element.textContent.includes('Security Check characters are incorrect. Please try again.')
-                });
-            }
-            if (!audioCaptchaErrorMessageVisible) {
-                captchaDone = true;
-            }
-            await page.waitFor(5000);
-        } catch (error) {
-            LOG.error(error);
-            throw error;
-        }
-    }
 }
 
 async function signupPageTwo(page, secretdata, variables) {
