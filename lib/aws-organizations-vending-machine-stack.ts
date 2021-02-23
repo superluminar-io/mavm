@@ -11,6 +11,9 @@ import * as targets from '@aws-cdk/aws-events-targets';
 import * as lambdaeventsources from '@aws-cdk/aws-lambda-event-sources';
 import * as sfn from '@aws-cdk/aws-stepfunctions';
 import * as tasks from '@aws-cdk/aws-stepfunctions-tasks';
+import * as cw from '@aws-cdk/aws-cloudwatch';
+import * as cw_actions from '@aws-cdk/aws-cloudwatch-actions';
+import * as sns from '@aws-cdk/aws-sns';
 
 
 import {PolicyStatement} from "@aws-cdk/aws-iam";
@@ -35,12 +38,21 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             description: "Currency for billing/invoice.",
         });
 
+        const mavmAlarmsSnsTopic = new sns.Topic(this, 'MavmAlarmsSnsTopic');
+
+        const accountCreationQueueDlq = new sqs.Queue(this, 'AccountCreationDLQueue');
         const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
             deadLetterQueue: {
-                queue: new sqs.Queue(this, 'AccountCreationDLQueue'),
+                queue: accountCreationQueueDlq,
                 maxReceiveCount: 5,
             }
         });
+        const accountCreationDLQueueAlarm = new cw.Alarm(this, ' AccountCreationDLQueueAlarm', {
+            evaluationPeriods: 1,
+            metric: accountCreationQueueDlq.metric('ApproximateNumberOfMessagesVisible'),
+            threshold: 1,
+        });
+        accountCreationDLQueueAlarm.addAlarmAction(new cw_actions.SnsAction(mavmAlarmsSnsTopic));
 
         const canary = new cws.Canary(this, 'CreateAccount', {
             runtime: new cws.Runtime('syn-nodejs-2.2'),
@@ -129,12 +141,19 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             }),
         });
 
+        const accountDeletionDlq = new sqs.Queue(this, 'AccountDeletionDLQueue');
         const accountDeletionQueue = new sqs.Queue(this, 'AccountDeletionQueue', {
             deadLetterQueue: {
-                queue: new sqs.Queue(this, 'AccountDeletionDLQueue'),
+                queue: accountDeletionDlq,
                 maxReceiveCount: 5,
             }
         });
+        const accountDeletionDlqAlarm = new cw.Alarm(this, ' accountDeletionDlqAlarm', {
+            evaluationPeriods: 1,
+            metric: accountDeletionDlq.metric('ApproximateNumberOfMessagesVisible'),
+            threshold: 1,
+        });
+        accountDeletionDlqAlarm.addAlarmAction(new cw_actions.SnsAction(mavmAlarmsSnsTopic));
 
         const accountDeletionFunction = new cws.Canary(this, 'AccountDeletionFunction', {
             runtime: new cws.Runtime('syn-nodejs-2.2'),
