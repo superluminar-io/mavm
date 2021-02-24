@@ -53,6 +53,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             threshold: 1,
         });
         accountCreationDLQueueAlarm.addAlarmAction(new cw_actions.SnsAction(mavmAlarmsSnsTopic));
+        accountCreationDLQueueAlarm.addOkAction(new cw_actions.SnsAction(mavmAlarmsSnsTopic));
 
         const canary = new cws.Canary(this, 'CreateAccount', {
             runtime: new cws.Runtime('syn-nodejs-2.2'),
@@ -154,6 +155,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             threshold: 1,
         });
         accountDeletionDlqAlarm.addAlarmAction(new cw_actions.SnsAction(mavmAlarmsSnsTopic));
+        accountDeletionDlqAlarm.addOkAction(new cw_actions.SnsAction(mavmAlarmsSnsTopic));
 
         const accountDeletionFunction = new cws.Canary(this, 'AccountDeletionFunction', {
             runtime: new cws.Runtime('syn-nodejs-2.2'),
