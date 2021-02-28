@@ -199,10 +199,6 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
 async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
 
     await page.waitFor(10000); // wait for redirects to finish
-    if (page.mainFrame().url().split("#").pop() === "/support") {
-        await activateBasicSupport(page);
-        return;
-    }
 
     await page.click('input[name="divaMethod"][value="Phone"]:first-child');
     await page.waitFor(1000);
