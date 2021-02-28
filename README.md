@@ -53,5 +53,4 @@ TODO
 
 - AWS account deletion fails if an AWS Organization with sub-accounts has been created. We are eagerly waiting for an AWS Organizations Account suspension API, which would solve this problem.
 - The API is not secured with authentication currently
-- No monitoring/alerting for dead-letter queues.
 - Overall little error handling. Failed account creation or deletion tries are put into a DLQ but not further handled. 
