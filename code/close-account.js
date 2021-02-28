@@ -128,6 +128,14 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
 
     await page.click('#signin_button');
     await page.waitFor(8000);
+
+    // remove cookie banner if present
+    try {
+        page.waitForSelector('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary');
+        await page.click('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary');
+        await page.waitFor(5000);
+    } catch (e) {
+    }
 }
 
 async function enableTaxInheritance(page, secretdata, ACCOUNT_NAME) {
