@@ -120,7 +120,55 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
     await resolvinginput.type(ACCOUNT_EMAIL, {delay: 100});
 
     await page.click('#next_button');
-    await page.waitFor(3000);
+
+    let solveCaptcha = false
+    try {
+        await page.waitForSelector('#captchaGuess', {timeout: 5000});
+        solveCaptcha = true;
+    } catch (e) {
+        // continue normal flow
+    }
+
+    if (solveCaptcha) {
+        captchanotdone = true;
+        captchaattempts = 0;
+        while (captchanotdone) {
+            captchaattempts += 1;
+            if (captchaattempts > 6) {
+                return;
+            }
+
+            await page.waitFor(3000); // wait for captcha_image to be loaded
+            let recaptchaimg = await page.$('#captcha_image');
+            let recaptchaurl = await page.evaluate((obj) => {
+                return obj.getAttribute('src');
+            }, recaptchaimg);
+
+            let captcharesult = await solveCaptcha2captcha(page, recaptchaurl, secretdata.twocaptcha_apikey);
+
+            let input2 = await page.$('#captchaGuess');
+
+            await input2.press('Backspace');
+            await input2.type(captcharesult, {delay: 100});
+
+            await page.waitFor(3000);
+
+            await page.click('#submit_captcha');
+
+            await page.waitFor(5000);
+
+            let errormessagediv = await page.$('#error_message');
+            let errormessagedivstyle = await page.evaluate((obj) => {
+                return obj.getAttribute('style');
+            }, errormessagediv);
+
+            if (errormessagedivstyle.includes("display: none")) {
+                captchanotdone = false;
+            }
+            await page.waitFor(2000);
+        }
+    }
+
 
     let input4 = await page.$('#password');
     await input4.press('Backspace');
@@ -222,4 +270,92 @@ async function markAccountDeleted(page, ACCOUNT_NAME, sqsMessage) {
             ReceiptHandle: sqsMessage.Messages[0].ReceiptHandle,
         }).promise();
     }
+}
+
+const httpGet = url => {
+    const https = require('https');
+    return new Promise((resolve, reject) => {
+        https.get(url, res => {
+            res.setEncoding('utf8');
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => resolve(body));
+        }).on('error', reject);
+    });
+};
+
+const httpGetBinary = url => {
+    const https = require('https');
+    return new Promise((resolve, reject) => {
+        https.get(url, res => {
+            //res.setEncoding('binary');
+            var data = [ ];
+            res.on('data', chunk => data.push(chunk));
+            res.on('end', () => resolve(Buffer.concat(data)));
+        }).on('error', reject);
+    });
+};
+
+const httpPostJson = (url, postData) => {
+    const https = require('https');
+    var querystring = require('querystring');
+
+    postData = querystring.stringify(postData);
+
+    var options = {
+        method: 'POST',
+    };
+
+    return new Promise((resolve, reject) => {
+        let req = https.request(url, options);
+        req.on('response', (res) => {
+            //If the response status code is not a 2xx success code
+            if (res.statusCode < 200 || res.statusCode > 299) {
+                reject("Failed: " + options.path);
+            }
+
+            res.setEncoding('utf8');
+            let body = '';
+            res.on('data', chunk => {
+                body += chunk;
+            });
+            res.on('end', () => resolve(body));
+        });
+
+        req.on('error', (error) => {
+            reject(error);
+        });
+
+        req.write(postData);
+        req.end();
+    });
+};
+
+const solveCaptcha2captcha = async (page, url, twocaptcha_apikey) => {
+    var imgbody = await httpGetBinary(url).then(res => {
+        return res;
+    });
+
+    var captcharef = await httpPostJson('https://2captcha.com/in.php', {
+        'key': twocaptcha_apikey,
+        'method': 'base64',
+        'body': imgbody.toString('base64')
+    }).then(res => {
+        console.log('2Captcha: ' + res)
+        return res.split("|").pop();
+    });
+
+    var captcharesult = '';
+    var i = 0;
+    while (!captcharesult.startsWith("OK") && i < 20) {
+        await new Promise(resolve => { setTimeout(resolve, 5000); });
+
+        captcharesult = await httpGet('https://2captcha.com/res.php?key=' + twocaptcha_apikey + '&action=get&id=' + captcharef).then(res => {
+            return res;
+        });
+
+        i++;
+    }
+
+    return captcharesult.split("|").pop();
 }

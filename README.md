@@ -42,7 +42,7 @@ The response is a JSON:
 1. Once an AWS account is vended via the MAVM API, a Step Function is started, which waits 24 hours (via a DynamoDB stream).
 1. The Step Function creates a message in an SQS queue which serves as a buffer and retry handler.
 1. A regularly scheduled CWS canary looks for items in the SQS queue
-1. If a message is found, the canary logs in into the AWS console and closes the account.
+1. If a message is found, the canary logs in into the AWS console, optionally solves a captcha via 2captcha (no audio captcha available here) and closes the account.
 1. The account is marked as deleted in the DynamoDB database.
 
 ## Installation
