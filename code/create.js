@@ -391,8 +391,10 @@ async function signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME) {
 
 async function signupPageTwo(page, secretdata, variables) {
 
+    let solveCaptcha = false;
     try {
         await page.waitForSelector('#captchaGuess', {timeout: 5000});
+        console.log('trying to solve captcha');
         solveCaptcha = true;
     } catch (e) {
         // continue normal flow
