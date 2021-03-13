@@ -186,7 +186,55 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
     await resolvinginput.type(ACCOUNT_EMAIL, {delay: 100});
 
     await page.click('#next_button');
-    await page.waitFor(3000);
+
+    let solveCaptcha = false
+    try {
+        await page.waitForSelector('#captchaGuess', {timeout: 5000});
+        solveCaptcha = true;
+    } catch (e) {
+        // continue normal flow
+    }
+
+    if (solveCaptcha) {
+        captchanotdone = true;
+        captchaattempts = 0;
+        while (captchanotdone) {
+            captchaattempts += 1;
+            if (captchaattempts > 6) {
+                return;
+            }
+
+            await page.waitFor(3000); // wait for captcha_image to be loaded
+            let recaptchaimg = await page.$('#captcha_image');
+            let recaptchaurl = await page.evaluate((obj) => {
+                return obj.getAttribute('src');
+            }, recaptchaimg);
+
+            let captcharesult = await solveCaptcha2captcha(page, recaptchaurl, secretdata.twocaptcha_apikey);
+
+            let input2 = await page.$('#captchaGuess');
+
+            await input2.press('Backspace');
+            await input2.type(captcharesult, {delay: 100});
+
+            await page.waitFor(3000);
+
+            await page.click('#submit_captcha');
+
+            await page.waitFor(5000);
+
+            let errormessagediv = await page.$('#error_message');
+            let errormessagedivstyle = await page.evaluate((obj) => {
+                return obj.getAttribute('style');
+            }, errormessagediv);
+
+            if (errormessagedivstyle.includes("display: none")) {
+                captchanotdone = false;
+            }
+            await page.waitFor(2000);
+        }
+    }
+
 
     let input4 = await page.$('#password');
     await input4.press('Backspace');
@@ -343,6 +391,48 @@ async function signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME) {
 
 async function signupPageTwo(page, secretdata, variables) {
 
+    try {
+        await page.waitForSelector('#captchaGuess', {timeout: 5000});
+        solveCaptcha = true;
+    } catch (e) {
+        // continue normal flow
+    }
+
+    if (solveCaptcha) {
+        captchanotdone = true;
+        captchaattempts = 0;
+        while (captchanotdone) {
+            captchaattempts += 1;
+            if (captchaattempts > 6) {
+                return;
+            }
+
+            await page.waitFor(3000); // wait for captcha_image to be loaded
+            let recaptchaimg = await page.$('img[alt="captcha"]:first-child');
+            let recaptchaurl = await page.evaluate((obj) => {
+                return obj.getAttribute('src');
+            }, recaptchaimg);
+
+            let captcharesult = await solveCaptcha2captcha(page, recaptchaurl, secretdata.twocaptcha_apikey);
+
+            let input2 = await page.$('input[name="captchaGuess"]:first-child');
+
+            await input2.press('Backspace');
+            await input2.type(captcharesult, {delay: 100});
+
+            await page.waitFor(3000);
+
+            await page.click('#CredentialCollection > fieldset > awsui-button > button');
+
+            try {
+                await page.waitForSelector('#awsui-radio-button-1', {timeout: 10000});
+                captchanotdone = false
+            } catch {
+                console.log("captcha not solved, trying again")
+            }
+        }
+    }
+
     await page.waitForSelector('#awsui-radio-button-1', {timeout: 5000});
     await page.click('#awsui-radio-button-1')
     await page.waitFor(1000);
@@ -488,3 +578,67 @@ async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
     await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.aws-billing-console-span10 > div.plutonium.aws-billing-console-root.awsui-v1-root > div > div > button');
     await page.waitFor(3000);
 }
+
+const solveCaptcha2captcha = async (page, url, twocaptcha_apikey) => {
+    var imgbody = await httpGetBinary(url).then(res => {
+        return res;
+    });
+
+    var captcharef = await httpPostJson('https://2captcha.com/in.php', {
+        'key': twocaptcha_apikey,
+        'method': 'base64',
+        'body': imgbody.toString('base64')
+    }).then(res => {
+        console.log('2Captcha: ' + res)
+        return res.split("|").pop();
+    });
+
+    var captcharesult = '';
+    var i = 0;
+    while (!captcharesult.startsWith("OK") && i < 20) {
+        await new Promise(resolve => { setTimeout(resolve, 5000); });
+
+        captcharesult = await httpGet('https://2captcha.com/res.php?key=' + twocaptcha_apikey + '&action=get&id=' + captcharef).then(res => {
+            return res;
+        });
+
+        i++;
+    }
+
+    return captcharesult.split("|").pop();
+}
+
+const httpPostJson = (url, postData) => {
+    const https = require('https');
+    var querystring = require('querystring');
+
+    postData = querystring.stringify(postData);
+
+    var options = {
+        method: 'POST',
+    };
+
+    return new Promise((resolve, reject) => {
+        let req = https.request(url, options);
+        req.on('response', (res) => {
+            //If the response status code is not a 2xx success code
+            if (res.statusCode < 200 || res.statusCode > 299) {
+                reject("Failed: " + options.path);
+            }
+
+            res.setEncoding('utf8');
+            let body = '';
+            res.on('data', chunk => {
+                body += chunk;
+            });
+            res.on('end', () => resolve(body));
+        });
+
+        req.on('error', (error) => {
+            reject(error);
+        });
+
+        req.write(postData);
+        req.end();
+    });
+};
