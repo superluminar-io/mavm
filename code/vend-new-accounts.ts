@@ -8,7 +8,7 @@ exports.handler = async (event: any, context: any, callback: any) => {
 
     const accounts: any = await dynamoDB.query(
         {
-            ExpressionAttributeValues: {":status_created": "CREATED"}, // actually it would be better to check for TO_CREATE status as well
+            ExpressionAttributeValues: {":status_created": "CREATED"},
             KeyConditionExpression: "account_status = :status_created",
             TableName: 'account',
             IndexName: 'account_status',
@@ -27,15 +27,8 @@ exports.handler = async (event: any, context: any, callback: any) => {
         const account_to_create = {
             'account_name': account_name,
             'account_email': account_email,
-            'account_status': 'TO_CREATE',
         };
 
-        await dynamoDB.put(
-            {
-                TableName: 'account',
-                Item: account_to_create
-            }
-        ).promise();
         await sqs.sendMessage(
             {
                 MessageBody: JSON.stringify(account_to_create),
