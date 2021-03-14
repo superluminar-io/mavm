@@ -16,10 +16,11 @@ The MAVM ensures that several AWS accounts are in stock and ready to be vended.
 1. A regularly scheduled CloudWatch Synthetics canary looks for messages in the SQS queue.
 1. If a message is found, it tries to create a new AWS account:<br>
    It registers with company and credit card data, which are stored in AWS Secrets Manager.<br>
-   It solves audio captchas with Amazon Transcribe.<br>
+   It solves audio captchas with Amazon Transcribe or 2captcha.<br>
    Phone verification is done via Amazon Connect.
 1. A cross-account IAM role with `AdministratorAccess` is created so that clients can programmatically interact with the account.
 1. Billing information is set: currency, invoice via email, billing contact email address.
+1. The account is written to a DynamoDB table, ready to be "vended".
 
 ### AWS account vending
 
