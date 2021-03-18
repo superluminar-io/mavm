@@ -44,16 +44,9 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         const accountCreationQueue = new sqs.Queue(this, 'AccountCreationQueue', {
             deadLetterQueue: {
                 queue: accountCreationQueueDlq,
-                maxReceiveCount: 5,
+                maxReceiveCount: 1, // if it didn't work, throw it away. The CWS canary monitoring throws an alarm on too many failures. (TODO: implement alarm)
             }
         });
-        const accountCreationDLQueueAlarm = new cw.Alarm(this, ' AccountCreationDLQueueAlarm', {
-            evaluationPeriods: 1,
-            metric: accountCreationQueueDlq.metric('ApproximateNumberOfMessagesVisible'),
-            threshold: 1,
-        });
-        accountCreationDLQueueAlarm.addAlarmAction(new cw_actions.SnsAction(mavmAlarmsSnsTopic));
-        accountCreationDLQueueAlarm.addOkAction(new cw_actions.SnsAction(mavmAlarmsSnsTopic));
 
         const canary = new cws.Canary(this, 'CreateAccount', {
             runtime: new cws.Runtime('syn-nodejs-2.2'),

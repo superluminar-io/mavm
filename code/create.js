@@ -71,7 +71,7 @@ const signup = async function () {
 
     await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
 
-    await saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage);
+    await saveAccountIdAndFinish(page, ACCOUNT_NAME, ACCOUNT_EMAIL, sqsMessage);
 };
 
 const httpGet = url => {
@@ -328,7 +328,7 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
     await page.waitForSelector('#aws-signup-app > div > div.App_content_5H0by > div > div > div:nth-child(5) > awsui-button > a')
 }
 
-async function saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage) {
+async function saveAccountIdAndFinish(page, ACCOUNT_NAME, ACCOUNT_EMAIL, sqsMessage) {
     await page.goto('https://console.aws.amazon.com/billing/rest/v1.0/account', {
         timeout: 0,
         waitUntil: ['domcontentloaded']
@@ -345,10 +345,13 @@ async function saveAccountIdAndFinish(page, ACCOUNT_NAME, sqsMessage) {
             }
         },
         TableName: 'account',
-        UpdateExpression: "SET account_id = :account_id, registration_date = :registration_date, account_status = :account_status",
+        UpdateExpression: "SET account_id = :account_id, account_email = :account_email, registration_date = :registration_date, account_status = :account_status",
         ExpressionAttributeValues: {
             ":account_id": {
                 S: account['accountId']
+            },
+            ":account_email": {
+                S: ACCOUNT_EMAIL
             },
             ":registration_date": {
                 S: new Date().toISOString()
