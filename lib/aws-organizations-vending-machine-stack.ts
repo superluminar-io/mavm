@@ -112,7 +112,8 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             environment: {
                 QUEUE_URL: accountCreationQueue.queueUrl,
                 VENDING_CEILING: vendingCeiling.valueAsString,
-            }
+            },
+            timeout: cdk.Duration.minutes(1),
         });
         vendNewAccountsFunction.addToRolePolicy(new PolicyStatement(
             {
