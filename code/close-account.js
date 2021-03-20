@@ -123,9 +123,10 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
 
     let solveCaptcha = false
     try {
-        await page.waitForSelector('#captchaGuess', {timeout: 5000});
+        await page.waitForSelector('#captchaGuess', {timeout: 5000, visible: true});
         solveCaptcha = true;
     } catch (e) {
+
         // continue normal flow
     }
 
