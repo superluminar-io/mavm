@@ -1,15 +1,10 @@
 // Adapted from and proudly found elsewhere at https://github.com/iann0036/aws-account-controller
 // special thanks to Ian McKay
-var synthetics = require('Synthetics');
-const LOG = require('SyntheticsLogger');
+const puppeteer = require('puppeteer');
 const AWS = require('aws-sdk');
 const sqs = new AWS.SQS();
 
 const QUEUE_URL = process.env['QUEUE_URL'];
-
-exports.handler = async () => {
-    return await closeAccountHandler();
-};
 
 async function closeAccount(page) {
     await page.goto('https://console.aws.amazon.com/billing/home?#/account', {
@@ -87,23 +82,16 @@ const closeAccountHandler = async function () {
     }).promise();
     let secretdata = JSON.parse(secretsmanagerresponse.SecretString);
 
-    let page = await synthetics.getPage();
+    const browser = await puppeteer.launch({args: ['--no-sandbox'], headless: false});
+    const page = await browser.newPage();
 
-    await synthetics.executeStep('loginToAccount', async function () {
-        await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
-    });
+    await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
 
-    await synthetics.executeStep('enableTaxInheritance', async function () {
-        await enableTaxInheritance(page, secretdata, ACCOUNT_NAME);
-    });
+    await enableTaxInheritance(page, secretdata, ACCOUNT_NAME);
 
-    await synthetics.executeStep('closeAccount', async function () {
-        await closeAccount(page);
-    });
+    await closeAccount(page);
 
-    await synthetics.executeStep('markAccountDeleted', async function () {
-        await markAccountDeleted(page, ACCOUNT_NAME, sqsMessage);
-    });
+    await markAccountDeleted(page, ACCOUNT_NAME, sqsMessage);
 };
 
 async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
@@ -359,3 +347,12 @@ const solveCaptcha2captcha = async (page, url, twocaptcha_apikey) => {
 
     return captcharesult.split("|").pop();
 }
+
+(async () => {
+    try {
+        await closeAccountHandler();
+    } catch (e) {
+        console.log('got exception in outer scope', e)
+        process.exit(1);
+    }
+})();
