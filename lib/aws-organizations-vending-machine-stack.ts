@@ -1,4 +1,5 @@
 import * as cdk from '@aws-cdk/core';
+import {IgnoreMode} from '@aws-cdk/core';
 import * as lambda_core from '@aws-cdk/aws-lambda';
 import * as lambda from '@aws-cdk/aws-lambda-nodejs';
 import * as cws from '@aws-cdk/aws-synthetics';
@@ -14,7 +15,8 @@ import * as tasks from '@aws-cdk/aws-stepfunctions-tasks';
 import * as cw from '@aws-cdk/aws-cloudwatch';
 import * as cw_actions from '@aws-cdk/aws-cloudwatch-actions';
 import * as sns from '@aws-cdk/aws-sns';
-
+import * as codebuild from '@aws-cdk/aws-codebuild';
+import {Asset} from '@aws-cdk/aws-s3-assets';
 
 import {PolicyStatement} from "@aws-cdk/aws-iam";
 import * as path from "path";
@@ -184,13 +186,66 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             queue: accountDeletionQueue,
         });
 
+        const closeAccountCodeAsset = new Asset(this, 'CloseAccountCodeAsset', {
+            path: path.join(__dirname, '../code/close-account'),
+            exclude: [
+                'node_modules',
+                '.git',
+                'cdk.out'
+            ],
+        });
+
+        const closeAccountCodeCodeBuild = new codebuild.Project(this, 'AccountDeletionProject', {
+            source: codebuild.Source.s3({
+                bucket: closeAccountCodeAsset.bucket,
+                path: closeAccountCodeAsset.s3ObjectKey,
+            }),
+        });
+        closeAccountCodeCodeBuild.role?.addToPrincipalPolicy(new PolicyStatement(
+            {
+                resources: ['*'],
+                actions: ['secretsmanager:GetSecretValue', 'dynamodb:*'], // TODO: least privilege
+            }
+        ));
+
+        const accountDeletionViaCodeBuildStep = new tasks.CodeBuildStartBuild(this, 'QueueAccountDeletionViaCodeBuildStep', {
+            project: closeAccountCodeCodeBuild,
+            integrationPattern: sfn.IntegrationPattern.RUN_JOB,
+            environmentVariablesOverride: {
+                ACCOUNT_NAME: {
+                    type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
+                    value: sfn.JsonPath.stringAt('$.account_name'),
+                },
+                ACCOUNT_EMAIL: {
+                    type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
+                    value: sfn.JsonPath.stringAt('$.account_email'),
+                },
+            },
+        });
+        accountDeletionViaCodeBuildStep.addRetry({
+            maxAttempts: 100
+        });
+
         const accountDeletionStateMachine = new sfn.StateMachine(
             this,
             'AccountDeletionStateMachine',
             {
-                definition: waitStep
+                definition:
+                    waitStep
                     .next(queueAccountDeletionStep)
                 ,
+            }
+        );
+
+        const waitStepNew = new sfn.Wait(this, 'WaitForAccountDeletionNew', {
+            time: sfn.WaitTime.duration(cdk.Duration.days(1)) // close vended account after one day
+        });
+        const accountDeletionStateMachineNew = new sfn.StateMachine(
+            this,
+            'AccountDeletionStateMachineNew',
+            {
+                definition: waitStepNew
+                    .next(accountDeletionViaCodeBuildStep),
             }
         );
 
@@ -209,7 +264,6 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         queueAccountDeletionFunction.addEventSource(new lambdaeventsources.DynamoEventSource(table, {
             startingPosition: lambda_core.StartingPosition.TRIM_HORIZON,
         }));
-
 
     }
 }
