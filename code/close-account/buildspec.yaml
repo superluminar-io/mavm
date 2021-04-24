@@ -1,0 +1,11 @@
+version: 0.2
+env:
+  shell: bash
+
+phases:
+  install:
+    commands:
+      - npm i
+  build:
+    commands:
+      - node index.js
