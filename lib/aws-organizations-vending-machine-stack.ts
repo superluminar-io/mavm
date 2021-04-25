@@ -138,54 +138,6 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             }),
         });
 
-        const accountDeletionDlq = new sqs.Queue(this, 'AccountDeletionDLQueue');
-        const accountDeletionQueue = new sqs.Queue(this, 'AccountDeletionQueue', {
-            deadLetterQueue: {
-                queue: accountDeletionDlq,
-                maxReceiveCount: 5,
-            }
-        });
-        const accountDeletionDlqAlarm = new cw.Alarm(this, ' accountDeletionDlqAlarm', {
-            evaluationPeriods: 1,
-            metric: accountDeletionDlq.metric('ApproximateNumberOfMessagesVisible'),
-            threshold: 1,
-        });
-        accountDeletionDlqAlarm.addAlarmAction(new cw_actions.SnsAction(mavmAlarmsSnsTopic));
-        accountDeletionDlqAlarm.addOkAction(new cw_actions.SnsAction(mavmAlarmsSnsTopic));
-
-        const accountDeletionFunction = new cws.Canary(this, 'AccountDeletionFunction', {
-            runtime: new cws.Runtime('syn-nodejs-2.2'),
-            test: cws.Test.custom({
-                code: cws.Code.fromInline(fs.readFileSync(path.join(__dirname, '../code/close-account.js'), {encoding: "utf-8"})),
-                handler: 'index.handler',
-            }),
-            startAfterCreation: true,
-
-            // start it regularly, this actually fakes a "watchdog" / "angel" process which keeps account creation running
-            schedule: cws.Schedule.expression('rate(1 hour)'),
-        });
-        accountDeletionFunction.role.addToPrincipalPolicy(new PolicyStatement(
-            {
-                resources: ['*'],
-                actions: ['secretsmanager:GetSecretValue', 'dynamodb:*', 'sqs:*'], // TODO: least privilege
-            }
-        ));
-        // work around https://github.com/aws/aws-cdk/pull/11865
-        const cfnAccountDeletionFunction = accountDeletionFunction.node.defaultChild as cws.CfnCanary;
-        cfnAccountDeletionFunction.addOverride('Properties.RunConfig.EnvironmentVariables', {
-            QUEUE_URL: accountDeletionQueue.queueUrl,
-
-        });
-        cfnAccountDeletionFunction.addOverride('Properties.RunConfig.TimeoutInSeconds', 600); // delete me after https://github.com/aws/aws-cdk/pull/11865 can be used
-
-        const waitStep = new sfn.Wait(this, 'WaitForAccountDeletion', {
-            time: sfn.WaitTime.duration(cdk.Duration.days(1)) // close vended account after one day
-        });
-        const queueAccountDeletionStep = new tasks.SqsSendMessage(this, 'QueueAccountDeletionStep', {
-            messageBody: sfn.TaskInput.fromDataAt('$'),
-            queue: accountDeletionQueue,
-        });
-
         const closeAccountCodeAsset = new Asset(this, 'CloseAccountCodeAsset', {
             path: path.join(__dirname, '../code/close-account'),
             exclude: [
@@ -226,17 +178,6 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             maxAttempts: 100
         });
 
-        const accountDeletionStateMachine = new sfn.StateMachine(
-            this,
-            'AccountDeletionStateMachine',
-            {
-                definition:
-                    waitStep
-                    .next(queueAccountDeletionStep)
-                ,
-            }
-        );
-
         const waitStepNew = new sfn.Wait(this, 'WaitForAccountDeletionNew', {
             time: sfn.WaitTime.duration(cdk.Duration.days(1)) // close vended account after one day
         });
@@ -252,7 +193,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         const queueAccountDeletionFunction = new lambda.NodejsFunction(this, 'QueueActionDeletionFunction', {
             entry: 'code/queue-account-deletion.ts',
             environment: {
-                ACCOUNT_CLOSE_STATE_MACHINE_ARN: accountDeletionStateMachine.stateMachineArn
+                ACCOUNT_CLOSE_STATE_MACHINE_ARN: accountDeletionStateMachineNew.stateMachineArn
             }
         });
         queueAccountDeletionFunction.addToRolePolicy(new PolicyStatement(
