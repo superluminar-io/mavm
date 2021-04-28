@@ -17,6 +17,26 @@ exports.handler = async () => {
     return await signup();
 };
 
+async function checkIfAccountIsReady(accountId) {
+    const sts = new AWS.STS();
+
+    const roleArnToAssume = util.format('arn:aws:iam::%s:role/OVMCrossAccountRole', accountId);
+
+    const assumedRoleCreds = await sts.assumeRole({
+        RoleArn: roleArnToAssume,
+        RoleSessionName: 'mavm-test',
+        DurationSeconds: 900}).promise();
+
+    const roleCreds = {accessKeyId: assumedRoleCreds.Credentials.AccessKeyId,
+        secretAccessKey: assumedRoleCreds.Credentials.SecretAccessKey,
+        sessionToken: assumedRoleCreds.Credentials.SessionToken};
+
+    const cloudformation = new AWS.CloudFormation({credentials: roleCreds});
+
+    // this is a smoke test if the cross account role has been set up
+    const cfnResult = await cloudformation.listStacks().promise();
+}
+
 const signup = async function () {
 
     let ACCOUNT_NAME;
@@ -71,7 +91,11 @@ const signup = async function () {
 
     await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
 
-    await saveAccountIdAndFinish(page, ACCOUNT_NAME, ACCOUNT_EMAIL, sqsMessage);
+    const accountId = await getAccountId(page);
+
+    await checkIfAccountIsReady(accountId);
+
+    await saveAccountIdAndFinish(ACCOUNT_NAME, ACCOUNT_EMAIL, accountId, sqsMessage);
 };
 
 const httpGet = url => {
@@ -328,7 +352,7 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
     await page.waitForSelector('#aws-signup-app > div > div.App_content_5H0by > div > div > div:nth-child(5) > awsui-button > a')
 }
 
-async function saveAccountIdAndFinish(page, ACCOUNT_NAME, ACCOUNT_EMAIL, sqsMessage) {
+async function getAccountId(page) {
     await page.goto('https://console.aws.amazon.com/billing/rest/v1.0/account', {
         timeout: 0,
         waitUntil: ['domcontentloaded']
@@ -336,6 +360,10 @@ async function saveAccountIdAndFinish(page, ACCOUNT_NAME, ACCOUNT_EMAIL, sqsMess
     await page.waitFor(3000);
     const innerText = await page.evaluate(() => document.querySelector('pre').innerText);
     const account = JSON.parse(innerText);
+    return account['accountId'];
+}
+
+async function saveAccountIdAndFinish(ACCOUNT_NAME, ACCOUNT_EMAIL, accountId, sqsMessage) {
 
     const ddb = new AWS.DynamoDB();
     await ddb.updateItem({
@@ -348,7 +376,7 @@ async function saveAccountIdAndFinish(page, ACCOUNT_NAME, ACCOUNT_EMAIL, sqsMess
         UpdateExpression: "SET account_id = :account_id, account_email = :account_email, registration_date = :registration_date, account_status = :account_status",
         ExpressionAttributeValues: {
             ":account_id": {
-                S: account['accountId']
+                S: accountId
             },
             ":account_email": {
                 S: ACCOUNT_EMAIL
