@@ -558,16 +558,15 @@ async function createCrossAccountRole(page, PRINCIPAL) {
 
     await page.waitForSelector(selector, {timeout: 5000});
     await page.click(selector);
-    await page.waitFor(5000);
+    await page.waitFor(10000);
 
     await page.waitForSelector(selector, {timeout: 5000});
     await page.click(selector);
-    await page.waitFor(5000);
 
     await page.waitForSelector(selector, {timeout: 5000});
     await page.click(selector);
-    await page.waitFor(5000);
 
+    await page.waitForSelector('#awsui-textfield-13');
     await page.type('#awsui-textfield-13', crossAccountRole, {delay: 100});
     await page.waitFor(5000);
 
