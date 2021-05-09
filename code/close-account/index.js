@@ -166,60 +166,91 @@ async function enableTaxInheritance(page, secretdata, ACCOUNT_NAME) {
     try {
         page.waitForSelector('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary');
         await page.click('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary');
-        await page.waitForTimeout(5000);
     } catch (e) {
     }
 
     // edit the management account
-    const managementAccountCheckbox = await page.$x('//div[@class="tax-table-cell ng-binding" and text()="' + ACCOUNT_NAME + '"]/preceding-sibling::div//input[@type="checkbox"]')
+    const managementAccountCheckbox = await page.$x('//td//span[text()="' + ACCOUNT_NAME + '"]/parent::span/parent::td//parent::tr//input');
     await managementAccountCheckbox[0].click();
     await page.waitForTimeout(1000);
 
-    // click edit
-    const manage_tax_registration_button = '#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > div:nth-child(2) > div:nth-child(1) > awsui-button-dropdown > div > button';
-    await page.waitForSelector(manage_tax_registration_button)
-    await page.click(manage_tax_registration_button)
-    const edit_link = '#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > div:nth-child(2) > div:nth-child(1) > awsui-button-dropdown > div > div > ul > li:nth-child(1) > a';
-    await page.waitForSelector(edit_link)
-    await page.click(edit_link)
+    await page.waitForSelector('awsui-button-dropdown[data-testid="manage-tax-reg-button"] button:first-child');
+    await page.click('awsui-button-dropdown[data-testid="manage-tax-reg-button"] button:first-child');
+    await page.waitForTimeout(1000);
+
+    await page.waitForSelector('li[data-testid="edit_button"]');
+    await page.click('li[data-testid="edit_button"]');
 
     // country "select" box
-    const country_selector = '#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > awsui-modal:nth-child(6) > div.awsui-modal-__state-showing.awsui-modal-container > div > div > div.awsui-modal-body > div > span > form > awsui-control-group:nth-child(2) > div > div > div.awsui-control-group-control > span > awsui-select > span > span';
-    await page.waitForSelector(country_selector)
-    await page.click(country_selector)
-    await page.waitForTimeout(1000);
-    await page.type(country_selector, secretdata.country)
-    await page.waitForTimeout(1000);
-    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > awsui-modal:nth-child(6) > div.awsui-modal-__state-showing.awsui-modal-container > div > div > div.awsui-modal-body > div > span > form > awsui-control-group:nth-child(2) > div > div > div.awsui-control-group-control > span > awsui-select > span > div > div > ul > li.awsui-select-option.awsui-select-option-highlight')
-    await page.waitForTimeout(1000);
+    await page.waitForSelector('#root_country');
+    await page.click('#root_country');
+
+    await page.waitForSelector('div[title="' + secretdata.country +'"]');
+    await page.click('div[title="' + secretdata.country +'"]');
 
     // tax id
-    await page.type('#awsui-textfield-1', secretdata.vatid)
-    await page.waitForTimeout(1000);
+    await page.waitForSelector('#root_registrationNumber input:first-child')
+    const taxId = await page.$('#root_registrationNumber input:first-child');
+    await taxId.click({ clickCount: 3 }); // select existing content
+    await taxId.type(secretdata.vatid);
 
     // legal entity
-    await page.type('#awsui-textfield-2', secretdata.company)
-    await page.waitForTimeout(1000);
+    await page.waitForSelector('#root_businessLegalName input:first-child');
+    const company = await page.$('#root_businessLegalName input:first-child');
+    await company.click({ clickCount: 3 }); // select existing content
+    await company.type(secretdata.company);
 
-    await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > awsui-modal:nth-child(6) > div.awsui-modal-__state-showing.awsui-modal-container > div > div > div.awsui-modal-footer > div > span > awsui-button:nth-child(1) > button')
-    await page.waitForTimeout(5000);
+    // street
+    await page.waitForSelector('#root_addressLine1 input:first-child');
+    const streetAddress = await page.$('#root_addressLine1 input:first-child');
+    await streetAddress.click({ clickCount: 3 }); // select existing content
+    await streetAddress.type(secretdata.streetaddress);
+
+    // city
+    await page.waitForSelector('#root_city input:first-child');
+    const city = await page.$('#root_city input:first-child');
+    await city.click({ clickCount: 3 }); // select existing content
+    await city.type(secretdata.city);
+
+    // zip
+    await page.waitForSelector('#root_postalCode input:first-child');
+    const postalCode = await page.$('#root_postalCode input:first-child');
+    await postalCode.click({ clickCount: 3 }); // select existing content
+    await postalCode.type(secretdata.postalcode);
+
+    // confirm
+    await page.waitForSelector('.awsui-wizard__primary-button button:first-child');
+    await page.click('.awsui-wizard__primary-button button:first-child');
+
+    // confirm
+    await page.waitForTimeout(1000);
+    await page.waitForSelector('.awsui-wizard__primary-button button:first-child');
+    await page.click('.awsui-wizard__primary-button button:first-child');
+
+    // confirm again
+    await page.waitForSelector('awsui-button[data-testid="modal-submit-button"] button:first-child');
+    await page.click('awsui-button[data-testid="modal-submit-button"] button:first-child');
 
     try {
-        await page.waitForSelector('#heritageCheckbox input', {timeout: 5000});
+        const taxInheritanceSelector = 'awsui-toggle[data-testid="tax-inheritance-toggle"] input:first-child';
+        await page.waitForSelector(taxInheritanceSelector, {timeout: 5000});
 
-        const taxInheritanceEnabled = await page.$eval('#heritageCheckbox input', check => { return check.checked});
+        const taxInheritanceEnabled = await page.$eval(taxInheritanceSelector, check => { return check.checked});
         if (taxInheritanceEnabled) {
             console.log('tax inheritance already enabled');
             return;
         }
 
-        await page.click('#heritageCheckbox > label > div')
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(5000); // wait for checkbox to be clickable
+        await page.click(taxInheritanceSelector);
 
-        await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div > div > div > div > div.margin-top-20 > div:nth-child(1) > awsui-modal:nth-child(7) > div.awsui-modal-__state-showing.awsui-modal-container > div > div > div.awsui-modal-footer > div > span > awsui-button:nth-child(1) > button')
+        // confirm
+        await page.waitForSelector('awsui-button[data-testid="modal-submit-button"] button:first-child');
+        await page.click('awsui-button[data-testid="modal-submit-button"] button:first-child');
+
         await page.waitForTimeout(5000);
     } catch (e) {
-        console.log('no tax inheritance, apparently because there are no sub-accounts');
+        console.log('no tax inheritance, apparently because there are no sub-accounts', e);
     }
 }
 
