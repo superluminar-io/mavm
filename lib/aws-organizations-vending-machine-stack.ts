@@ -65,7 +65,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         canary.role.addToPrincipalPolicy(new PolicyStatement(
             {
                 resources: ['*'],
-                actions: ['secretsmanager:GetSecretValue', 'ssm:*Parameter*', 'sqs:*', 's3:*', 'transcribe:*', 'dynamodb:*'], // TODO: least privilege
+                actions: ['secretsmanager:GetSecretValue', 'ssm:*Parameter*', 'sqs:*', 's3:*', 'transcribe:*', 'dynamodb:*', 'sts:*'], // TODO: least privilege
             }
         ));
 
