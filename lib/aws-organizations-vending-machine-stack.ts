@@ -80,6 +80,85 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         });
         cfnCanary.addOverride('Properties.RunConfig.TimeoutInSeconds', 600); // delete me after https://github.com/aws/aws-cdk/pull/11865 can be used
 
+        // NEW ACCOUNT CREATION START
+        const createAccountCodeAsset = new Asset(this, 'CreateAccountCodeAsset', {
+            path: path.join(__dirname, '../code/create-account'),
+            exclude: [
+                'node_modules',
+                '.git',
+                'cdk.out'
+            ],
+        });
+
+        const createAccountCodeProject = new codebuild.Project(this, 'CreateAccountCodeProject', {
+            source: codebuild.Source.s3({
+                bucket: createAccountCodeAsset.bucket,
+                path: createAccountCodeAsset.s3ObjectKey,
+            }),
+            environmentVariables: {
+                PRINCIPAL: {value: process.env.CDK_DEFAULT_ACCOUNT },
+                INVOICE_CURRENCY: {value: invoiceCurrency.valueAsString},
+                INVOICE_EMAIL: {value: invoiceEmail.valueAsString},
+            }
+        });
+        createAccountCodeProject.role?.addToPrincipalPolicy(new PolicyStatement(
+            {
+                resources: ['*'],
+                actions: ['secretsmanager:GetSecretValue', 'ssm:*Parameter*', 'sqs:*', 's3:*', 'transcribe:*', 'dynamodb:*', 'sts:*'], // TODO: least privilege
+            }
+        ));
+
+        const createAccountStateMachineAccountCreationStep = new tasks.CodeBuildStartBuild(this, 'CreateAccountStateMachineAccountCreationStep', {
+            project: createAccountCodeProject,
+            integrationPattern: sfn.IntegrationPattern.RUN_JOB,
+            environmentVariablesOverride: {
+                ACCOUNT_NAME: {
+                    type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
+                    value: sfn.JsonPath.stringAt('$.account_name'),
+                },
+                ACCOUNT_EMAIL: {
+                    type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
+                    value: sfn.JsonPath.stringAt('$.account_email'),
+                },
+            },
+        });
+        createAccountStateMachineAccountCreationStep.addCatch(new sfn.Pass(this, 'CreateAccountStateMachineCatchStep'));
+
+        const accountNameProviderFunction = new lambda.NodejsFunction(this, 'AccountNameProviderFunction', {
+            entry: 'code/account-name-provider.ts',
+            environment: {
+                VENDING_CEILING: vendingCeiling.valueAsString,
+            },
+            timeout: cdk.Duration.minutes(1),
+        });
+        accountNameProviderFunction.addToRolePolicy(new PolicyStatement(
+            {
+                resources: ['*'],
+                actions: ['dynamodb:*'], // TODO: least privilege
+            }
+        ));
+
+        const createAccountStateMachineAccountNameProviderStep = new tasks.LambdaInvoke(this, 'CreateAccountStateMachineAccountNameProviderStep', {
+            lambdaFunction: accountNameProviderFunction,
+            resultPath: '$.accountNameProviderStep'
+        });
+
+        const createAccountStateMachineMapStep = new sfn.Map(this, 'CreateAccountStateMachineMapStep', {
+            inputPath: '$.accountNameProviderStep',
+            itemsPath: '$.Payload',
+            maxConcurrency: 1,
+        });
+        createAccountStateMachineMapStep.iterator(createAccountStateMachineAccountCreationStep);
+
+        const createAccountStateMachine = new sfn.StateMachine(
+            this,
+            'CreateAccountStateMachine',
+            {
+                definition: createAccountStateMachineAccountNameProviderStep
+                    .next(createAccountStateMachineMapStep)
+            }
+        );
+
         const table = new dynamodb.Table(this, "AccountsTable", {
             tableName: 'account', // don't hardcode once env can be passed to canary
             partitionKey: {

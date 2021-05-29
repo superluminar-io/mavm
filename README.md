@@ -12,9 +12,9 @@ The MAVM consists of three parts: AWS account creation, AWS account deletion, an
 
 The MAVM ensures that several AWS accounts are in stock and ready to be vended.
 
-1. A scheduled Lambda checks if there are enough created AWS accounts in stock. It fills an SQS queue with AWS accounts to be created, if necessary.
-1. A regularly scheduled CloudWatch Synthetics canary looks for messages in the SQS queue.
-1. If a message is found, it tries to create a new AWS account:<br>
+1. A scheduled Step Function checks via a Lambda function whether there are enough created AWS accounts in stock. The Lambda returns an array of account name/email pairs to be created, if necessary.
+1. The Step Function iterates over the array.
+1. Each iteration starts a CodeBuild project (`code/create-account`) which tries to create a new AWS account via Puppeteer:<br>
    It registers with company and credit card data, which are stored in AWS Secrets Manager.<br>
    It solves audio captchas with Amazon Transcribe or 2captcha.<br>
    Phone verification is done via Amazon Connect.
