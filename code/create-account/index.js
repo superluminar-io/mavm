@@ -180,7 +180,7 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
         waitUntil: ['domcontentloaded']
     });
     await page.waitForSelector('#resolving_input', {timeout: 15000});
-    await page.waitFor(500);
+    await page.waitForTimeout(500);
 
     let resolvinginput = await page.$('#resolving_input');
     await resolvinginput.press('Backspace');
@@ -205,7 +205,7 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
                 return;
             }
 
-            await page.waitFor(3000); // wait for captcha_image to be loaded
+            await page.waitForTimeout(3000); // wait for captcha_image to be loaded
             let recaptchaimg = await page.$('#captcha_image');
             let recaptchaurl = await page.evaluate((obj) => {
                 return obj.getAttribute('src');
@@ -218,11 +218,11 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
             await input2.press('Backspace');
             await input2.type(captcharesult, {delay: 100});
 
-            await page.waitFor(3000);
+            await page.waitForTimeout(3000);
 
             await page.click('#submit_captcha');
 
-            await page.waitFor(5000);
+            await page.waitForTimeout(5000);
 
             let errormessagediv = await page.$('#error_message');
             let errormessagedivstyle = await page.evaluate((obj) => {
@@ -232,7 +232,7 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
             if (errormessagedivstyle.includes("display: none")) {
                 captchanotdone = false;
             }
-            await page.waitFor(2000);
+            await page.waitForTimeout(2000);
         }
     }
 
@@ -242,15 +242,15 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
     await input4.type(secretdata.password, {delay: 100});
 
     await page.click('#signin_button');
-    await page.waitFor(8000);
+    await page.waitForTimeout(8000);
 }
 
 async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
 
-    await page.waitFor(10000); // wait for redirects to finish
+    await page.waitForTimeout(10000); // wait for redirects to finish
 
     await page.click('input[name="divaMethod"][value="Phone"]:first-child');
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     let portalphonenumber = await page.$('input[name="phoneNumber"]:first-child');
     await portalphonenumber.press('Backspace');
@@ -273,12 +273,12 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
 
             await page.waitForSelector('img[alt="Change to audio security check"]:first-child');
             await page.click('img[alt="Change to audio security check"]:first-child');
-            await page.waitFor(1000);
+            await page.waitForTimeout(1000);
 
             await page.waitForSelector('span[aria-label="Play Audio"]')
             await page.click('span[aria-label="Play Audio"]')
 
-            await page.waitFor(1000);
+            await page.waitForTimeout(1000);
 
             const audioCaptchaUrl = (await captchaResponse).url();
             console.log('Audio captcha URL:', audioCaptchaUrl);
@@ -288,7 +288,7 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
             let input32 = await page.$('input[name="captchaGuess"]:first-child');
             await input32.press('Backspace');
             await input32.type(solvedAudioCaptcha, {delay: 100});
-            await page.waitFor(1000);
+            await page.waitForTimeout(1000);
 
             let submitc = await page.$('#IdentityVerification > fieldset > awsui-button > button');
             await submitc.click();
@@ -301,7 +301,7 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
                 if (phonecodetext.trim().length == 4) {
                     captchanotdone = false;
                 } else {
-                    await page.waitFor(5000);
+                    await page.waitForTimeout(5000);
                 }
             } catch (error) {
                 console.log('captcha probably not done, continue', error)
@@ -333,7 +333,7 @@ async function getAccountId(page) {
         timeout: 0,
         waitUntil: ['domcontentloaded']
     });
-    await page.waitFor(3000);
+    await page.waitForTimeout(3000);
     const innerText = await page.evaluate(() => document.querySelector('pre').innerText);
     const account = JSON.parse(innerText);
     return account['accountId'];
@@ -374,17 +374,17 @@ async function signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME) {
 
     // remove cookie banner so that it's possible to click on the submit button later, otherwise the UI thinks the button cannot be clicked
     await page.$eval('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary', e => e.click());
-    await page.waitFor(5000);
+    await page.waitForTimeout(5000);
 
     await page.type('#awsui-input-0', ACCOUNT_EMAIL);
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
     await page.type('#awsui-input-1', secretdata.password);
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
     await page.type('#awsui-input-2', secretdata.password);
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
     await page.type('#awsui-input-3', ACCOUNT_NAME);
 
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.click('#CredentialCollection button:first-child');
 }
@@ -409,7 +409,7 @@ async function signupPageTwo(page, secretdata, variables) {
                 return;
             }
 
-            await page.waitFor(3000); // wait for captcha_image to be loaded
+            await page.waitForTimeout(3000); // wait for captcha_image to be loaded
             let recaptchaimg = await page.$('img[alt="captcha"]:first-child');
             let recaptchaurl = await page.evaluate((obj) => {
                 return obj.getAttribute('src');
@@ -422,7 +422,7 @@ async function signupPageTwo(page, secretdata, variables) {
             await input2.press('Backspace');
             await input2.type(captcharesult, {delay: 100});
 
-            await page.waitFor(3000);
+            await page.waitForTimeout(3000);
 
             await page.click('#CredentialCollection > fieldset > awsui-button > button');
 
@@ -437,43 +437,43 @@ async function signupPageTwo(page, secretdata, variables) {
 
     await page.waitForSelector('#awsui-radio-button-1', {timeout: 5000});
     await page.click('#awsui-radio-button-1')
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.type('input[name="address.fullName"]:first-child', secretdata.company);
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.type('input[name="address.company"]:first-child', secretdata.company);
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.type('input[name="address.phoneNumber"]:first-child', variables['PHONE_NUMBER'].replace('+1', '+1 '));
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.click('#awsui-select-1 > div > awsui-icon > span'); // click country selection
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     const option = (await page.$x(
         '//*[@id = "awsui-select-1-dropdown-options"]//span[text() = "' + secretdata.country + '"]'
     ))[0];
     await option.click();
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.type('input[name="address.addressLine1"]:first-child', secretdata.streetaddress);
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.type('input[name="address.city"]:first-child', secretdata.city);
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.type('input[name="address.state"]:first-child', secretdata.state);
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.type('input[name="address.postalCode"]:first-child', secretdata.postalcode);
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.click('input[name="agreement"]:first-child');
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.click('#ContactInformation > fieldset > awsui-button > button')
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 }
 
 async function signupCreditCard(page, secretdata) {
@@ -482,10 +482,10 @@ async function signupCreditCard(page, secretdata) {
     let input5 = await page.$('input[name="cardNumber"]:first-child');
     await input5.press('Backspace');
     await input5.type(secretdata.ccnumber, {delay: 100});
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.click('#awsui-select-2 > div > awsui-icon > span'); // click month selection
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     const ccExpireDate = new Date(secretdata.ccyear, secretdata.ccmonth - 1, 1);
     const ccExpireMonthName = ccExpireDate.toLocaleString('default', { month: 'long' });
@@ -493,23 +493,23 @@ async function signupCreditCard(page, secretdata) {
     await (await page.$x(
         '//*[@id = "awsui-select-2-dropdown-options"]//span[text() = "' + ccExpireMonthName + '"]'
     ))[0].click();
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await page.click('#awsui-select-3 > div > awsui-icon > span'); // click month selection
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     await (await page.$x(
         '//*[@id = "awsui-select-3-dropdown-options"]//span[text() = "' + secretdata.ccyear + '"]'
     ))[0].click();
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 
     let input6 = await page.$('input[name="accountHolderName"]:first-child');
     await input6.press('Backspace');
     await input6.type(secretdata.ccname, {delay: 100});
-    await page.waitFor(2000);
+    await page.waitForTimeout(2000);
 
     await page.click('#PaymentInformation > fieldset > awsui-button > button')
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
 }
 
 async function createCrossAccountRole(page, PRINCIPAL) {
@@ -527,7 +527,7 @@ async function createCrossAccountRole(page, PRINCIPAL) {
 
     await page.waitForSelector(selector, {timeout: 5000});
     await page.click(selector);
-    await page.waitFor(10000);
+    await page.waitForTimeout(10000);
 
     await page.waitForSelector(selector, {timeout: 5000});
     await page.click(selector);
@@ -537,48 +537,48 @@ async function createCrossAccountRole(page, PRINCIPAL) {
 
     await page.waitForSelector('#awsui-textfield-13');
     await page.type('#awsui-textfield-13', crossAccountRole, {delay: 100});
-    await page.waitFor(5000);
+    await page.waitForTimeout(5000);
 
     // click on "create role"
     await page.waitForSelector(selector, {timeout: 5000});
     await page.click(selector);
-    await page.waitFor(5000);
+    await page.waitForTimeout(5000);
 }
 
 async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
     await page.goto('https://console.aws.amazon.com/billing/home?#/account');
-    await page.waitFor(3000);
+    await page.waitForTimeout(3000);
     await page.waitForSelector('#account__edit-currency-preference');
     await page.click('#account__edit-currency-preference');
 
-    await page.waitFor(3000);
+    await page.waitForTimeout(3000);
     await page.waitForSelector('#account__select-currencies-list');
-    await page.waitFor(3000);
+    await page.waitForTimeout(3000);
     await page.select('#account__select-currencies-list', INVOICE_CURRENCY);
 
-    await page.waitFor(3000);
+    await page.waitForTimeout(3000);
     await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(3) > div > div > div > div.account-information-update-buttons.margin-top-10 > button.btn.btn-primary');
-    await page.waitFor(3000);
+    await page.waitForTimeout(3000);
 
     await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > a')
-    await page.waitFor(3000);
+    await page.waitForTimeout(3000);
     await page.type('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(1) > input', 'Bill Gates')
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
     await page.type('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(2) > input', 'CFO')
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
     await page.type('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(3) > input', INVOICE_EMAIL)
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
     await page.type('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(4) > input', '+1234567890')
-    await page.waitFor(1000);
+    await page.waitForTimeout(1000);
     await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div.account-information-update-buttons.margin-top-10.ng-scope > button.btn.btn-primary');
-    await page.waitFor(3000);
+    await page.waitForTimeout(3000);
 
     await page.goto('https://console.aws.amazon.com/billing/home?#/preferences');
-    await page.waitFor(3000);
+    await page.waitForTimeout(3000);
     await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.plutonium.aws-billing-console-root.awsui-v1-root > div > div > div.aws-billing-console-span10 > div:nth-child(2) > div > label > span > i');
-    await page.waitFor(3000);
+    await page.waitForTimeout(3000);
     await page.click('#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.aws-billing-console-span10 > div.plutonium.aws-billing-console-root.awsui-v1-root > div > div > button');
-    await page.waitFor(3000);
+    await page.waitForTimeout(3000);
 }
 
 const solveCaptcha2captcha = async (page, url, twocaptcha_apikey) => {
