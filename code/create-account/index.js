@@ -13,6 +13,8 @@ const INVOICE_CURRENCY = process.env['INVOICE_CURRENCY'];
 const ACCOUNT_NAME = process.env['ACCOUNT_NAME'];
 const ACCOUNT_EMAIL = process.env['ACCOUNT_EMAIL'];
 
+const QUEUE_URL_3D_SECURE = process.env['QUEUE_URL_3D_SECURE'];
+
 async function checkIfAccountIsReady(accountId) {
     const sts = new AWS.STS();
 
@@ -49,14 +51,14 @@ const signup = async function () {
 
     let variables = JSON.parse(connectssmparameter['Parameter']['Value']);
 
-    const browser = await puppeteer.launch({args: ['--no-sandbox']});
+    const browser = await puppeteer.launch({args: ['--no-sandbox', '--disable-web-security', '--disable-features=IsolateOrigins,site-per-process']});
     const page = await browser.newPage();
 
     await signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME);
 
     await signupPageTwo(page, secretdata, variables);
 
-    await signupCreditCard(page, secretdata);
+    await signupCreditCard(page, secretdata, QUEUE_URL_3D_SECURE);
 
     await signupVerification(page, variables, ACCOUNT_NAME, ssm);
 
@@ -476,7 +478,7 @@ async function signupPageTwo(page, secretdata, variables) {
     await page.waitForTimeout(1000);
 }
 
-async function signupCreditCard(page, secretdata) {
+async function signupCreditCard(page, secretdata, queueUrl3dSecure) {
     await page.waitForSelector('input[name="cardNumber"]:first-child');
 
     let input5 = await page.$('input[name="cardNumber"]:first-child');
@@ -510,6 +512,51 @@ async function signupCreditCard(page, secretdata) {
 
     await page.click('#PaymentInformation > fieldset > awsui-button > button')
     await page.waitForTimeout(1000);
+
+    if (queueUrl3dSecure) {
+        // 3D-Secure
+        await page.waitForNavigation({'waitUntil': 'networkidle0'});
+        const frame3DSecureElement = await page.waitForSelector('iframe:first-child');
+        const frame3DSecure = await frame3DSecureElement.contentFrame();
+        const tan3dSecureSelector = await frame3DSecure.waitForSelector('#challengeDataEntry', {
+            timeout: 20000,
+            visible: true,
+        });
+
+        // give SMS some time to arrive
+        // await page.waitForTimeout(20000);
+
+        // retrieve SMS result from SQS queue
+        const sqs = new AWS.SQS();
+        const sqsMessage = await sqs.receiveMessage({
+            QueueUrl: queueUrl3dSecure,
+            MaxNumberOfMessages: 1,
+            WaitTimeSeconds: 20,
+        }).promise();
+
+        if (typeof sqsMessage.Messages === 'undefined') {
+            throw 'Could not read 3d secure tan from SQS queue.';
+        }
+
+        // the following code is specific to Amazon DE Credit Card and needs to be adapted to other CC providers
+
+        // credit card tan
+        const tan3dSecure = sqsMessage.Messages[0].Body.substr(0, 6);
+        await tan3dSecureSelector.type(tan3dSecure, {delay: 300});
+        await page.waitForTimeout(5000);
+        await frame3DSecure.click('#confirm');
+
+        // Credit Card Pin
+        await frame3DSecure.waitForNavigation({'waitUntil': 'networkidle0'});
+        const tan3dSecurePinSelector = await frame3DSecure.waitForSelector('#challengeDataEntry', {
+            timeout: 20000,
+            visible: true,
+        });
+        await tan3dSecurePinSelector.type(secretdata.cc_pin, {delay: 300});
+        await page.waitForTimeout(5000);
+        await frame3DSecure.click('#confirm');
+        await page.waitForTimeout(5000);
+    }
 }
 
 async function createCrossAccountRole(page, PRINCIPAL) {

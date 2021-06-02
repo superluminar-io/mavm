@@ -1,10 +1,12 @@
 import * as cdk from '@aws-cdk/core';
-import {IgnoreMode} from '@aws-cdk/core';
+import {CfnOutput, IgnoreMode} from '@aws-cdk/core';
 import * as lambda_core from '@aws-cdk/aws-lambda';
 import * as lambda from '@aws-cdk/aws-lambda-nodejs';
 import * as cws from '@aws-cdk/aws-synthetics';
 import * as sqs from '@aws-cdk/aws-sqs';
 import * as dynamodb from '@aws-cdk/aws-dynamodb';
+import * as iam from '@aws-cdk/aws-iam';
+import * as restapi from '@aws-cdk/aws-apigateway';
 import * as httpapi from '@aws-cdk/aws-apigatewayv2';
 import * as httpapiint from '@aws-cdk/aws-apigatewayv2-integrations';
 import * as events from '@aws-cdk/aws-events';
@@ -49,6 +51,61 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 maxReceiveCount: 1, // if it didn't work, throw it away. The CWS canary monitoring throws an alarm on too many failures. (TODO: implement alarm)
             }
         });
+
+        const creditCard3SecureQueue = new sqs.Queue(this, 'CreditCard3SecureQueue', {
+            retentionPeriod: cdk.Duration.minutes(1),
+        });
+
+        const creditCard3SecureQueueRole = new iam.Role(this, "CreditCard3SecureQueueRole", {
+            assumedBy: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+        });
+
+        creditCard3SecureQueueRole.attachInlinePolicy(
+            new iam.Policy(this, "SendMessagePolicy", {
+                statements: [
+                    new iam.PolicyStatement({
+                        actions: ["sqs:SendMessage"],
+                        effect: iam.Effect.ALLOW,
+                        resources: [creditCard3SecureQueue.queueArn],
+                    }),
+                ],
+            })
+        );
+
+        const creditCard3SecureQueueApi = new restapi.RestApi(this, "CreditCard3SecureQueueApi", {
+            deployOptions: {
+                stageName: 'prod',
+            },
+        });
+
+        const creditCard3SecureQueueApiResource = creditCard3SecureQueueApi.root.addResource("queue");
+        creditCard3SecureQueueApiResource.addMethod(
+            "GET",
+            new restapi.AwsIntegration({
+                service: "sqs",
+                path: `${cdk.Aws.ACCOUNT_ID}/${creditCard3SecureQueue.queueName}`,
+                integrationHttpMethod: "POST",
+                options: {
+                    credentialsRole: creditCard3SecureQueueRole,
+                    passthroughBehavior: restapi.PassthroughBehavior.NEVER,
+                    requestParameters: {
+                        "integration.request.header.Content-Type": `'application/x-www-form-urlencoded'`,
+                    },
+                    requestTemplates: {
+                        "application/json": `Action=SendMessage&MessageBody=$util.urlEncode("$method.request.querystring.text")`,
+                    },
+                    integrationResponses: [
+                        {
+                            statusCode: "200",
+                            responseTemplates: {
+                                "application/json": `{"done": true}`,
+                            },
+                        },
+                    ],
+                },
+            }),
+            { methodResponses: [{ statusCode: "200" }] }
+        );
 
         const canary = new cws.Canary(this, 'CreateAccount', {
             runtime: new cws.Runtime('syn-nodejs-2.2'),
@@ -99,6 +156,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 PRINCIPAL: {value: process.env.CDK_DEFAULT_ACCOUNT },
                 INVOICE_CURRENCY: {value: invoiceCurrency.valueAsString},
                 INVOICE_EMAIL: {value: invoiceEmail.valueAsString},
+                QUEUE_URL_3D_SECURE: {value: creditCard3SecureQueue.queueUrl},
             }
         });
         createAccountCodeProject.role?.addToPrincipalPolicy(new PolicyStatement(
