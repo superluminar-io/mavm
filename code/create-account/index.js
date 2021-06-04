@@ -70,7 +70,8 @@ const signup = async function () {
 
     await createCrossAccountRole(page, PRINCIPAL);
 
-    await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
+    // broken with headless chrome. will be probably become obsolete or superseded by awsapilib
+    //await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
 
     const accountId = await getAccountId(page);
 
