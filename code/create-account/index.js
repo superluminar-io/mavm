@@ -54,6 +54,10 @@ const signup = async function () {
     const browser = await puppeteer.launch({args: ['--no-sandbox', '--disable-web-security', '--disable-features=IsolateOrigins,site-per-process']});
     const page = await browser.newPage();
 
+    // remove indicators that we are running headless
+    const userAgent = await page.evaluate(() => navigator.userAgent);
+    await page.setUserAgent(userAgent.replace('Headless', ''));
+
     await signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME);
 
     await signupPageTwo(page, secretdata, variables);
