@@ -72,6 +72,7 @@ const signup = async function () {
 
     // broken with headless chrome. will be probably become obsolete or superseded by awsapilib
     //await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
+    await page.waitForTimeout(50000);
 
     const accountId = await getAccountId(page);
 
