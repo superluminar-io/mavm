@@ -52,3 +52,4 @@ TODO
 
 - AWS account deletion fails if an AWS Organization with sub-accounts has been created. We are eagerly waiting for an AWS Organizations Account suspension API, which would solve this problem.
 - The API is not secured with authentication currently
+- Credit card 3D-Secure authentication implementation is currently mandatory and specific to german Amazon credit card. It can be adapted to other credit card issuers, though.
