@@ -131,7 +131,12 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
                 },
             },
         });
-        createAccountStateMachineAccountCreationStep.addCatch(new sfn.Pass(this, 'CreateAccountStateMachineCatchStep'));
+
+        const createAccountStateMachineWaitStep = new sfn.Wait(this, 'CreateAccountStateMachineWaitStep', {
+            time: sfn.WaitTime.duration(cdk.Duration.minutes(30))
+        });
+
+        createAccountStateMachineAccountCreationStep.addCatch(createAccountStateMachineWaitStep);
 
         const accountNameProviderFunction = new lambda.NodejsFunction(this, 'AccountNameProviderFunction', {
             entry: 'code/account-name-provider.ts',
@@ -156,9 +161,6 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             inputPath: '$.accountNameProviderStep',
             itemsPath: '$.Payload',
             maxConcurrency: 1,
-        });
-        const createAccountStateMachineWaitStep = new sfn.Wait(this, 'CreateAccountStateMachineWaitStep', {
-            time: sfn.WaitTime.duration(cdk.Duration.minutes(30))
         });
         createAccountStateMachineMapStep.iterator(createAccountStateMachineAccountCreationStep.next(createAccountStateMachineWaitStep));
 
