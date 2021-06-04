@@ -70,9 +70,7 @@ const signup = async function () {
 
     await createCrossAccountRole(page, PRINCIPAL);
 
-    // broken with headless chrome. will be probably become obsolete or superseded by awsapilib
-    //await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
-    await page.waitForTimeout(50000);
+    await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
 
     const accountId = await getAccountId(page);
 
@@ -599,6 +597,8 @@ async function createCrossAccountRole(page, PRINCIPAL) {
 }
 
 async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
+
+    await page.setViewport({ width: 1366, height: 2000});
     await page.goto('https://console.aws.amazon.com/billing/home?#/account');
     await page.waitForTimeout(3000);
     await page.waitForSelector('#account__edit-currency-preference');
