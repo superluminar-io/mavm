@@ -206,7 +206,10 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             itemsPath: '$.Payload',
             maxConcurrency: 1,
         });
-        createAccountStateMachineMapStep.iterator(createAccountStateMachineAccountCreationStep);
+        const createAccountStateMachineWaitStep = new sfn.Wait(this, 'CreateAccountStateMachineWaitStep', {
+            time: sfn.WaitTime.duration(cdk.Duration.minutes(30))
+        });
+        createAccountStateMachineMapStep.iterator(createAccountStateMachineAccountCreationStep.next(createAccountStateMachineWaitStep));
 
         const createAccountStateMachine = new sfn.StateMachine(
             this,
