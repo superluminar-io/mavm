@@ -11,6 +11,7 @@ exports.handler = async (event: any, context: any, callback: any) => {
             Limit: 1,
             TableName: 'account',
             IndexName: 'account_status',
+            ScanIndexForward: false,
         }
     ).promise();
 
