@@ -133,7 +133,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         });
 
         const createAccountStateMachineWaitStep = new sfn.Wait(this, 'CreateAccountStateMachineWaitStep', {
-            time: sfn.WaitTime.duration(cdk.Duration.minutes(30))
+            time: sfn.WaitTime.duration(cdk.Duration.minutes(120))
         });
 
         createAccountStateMachineAccountCreationStep.addCatch(createAccountStateMachineWaitStep);
