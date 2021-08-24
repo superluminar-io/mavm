@@ -33,17 +33,16 @@ async function closeAccount(page) {
         waitUntil: ['domcontentloaded']
     });
 
-    await page.waitForTimeout(8000);
+    await page.waitForSelector('input[data-testid="aws-billing-account-form-input-is-closing-account"]:first-child');
 
-    let closeaccountcbs = await page.$$('.close-account-checkbox > input');
-    await closeaccountcbs.forEach(async (cb) => {
-        await cb.evaluate((e) => e.click());
-        await page.waitForTimeout(1000);
-    });
+    await page.click('input[data-testid="aws-billing-account-form-input-is-closing-account"]:first-child');
+    await page.click('input[data-testid="aws-billing-account-form-input-is-second-closing-account"]:first-child');
+    await page.click('input[data-testid="aws-billing-account-form-input-is-third-closing-account"]:first-child');
+    await page.click('input[data-testid="aws-billing-account-form-input-is-fourth-closing-account"]:first-child');
 
     await page.waitForTimeout(5000);
 
-    await page.click('.btn-danger'); // close account button
+    await page.click('button[data-testid="aws-billing-account-form-button-close-account"]:first-child'); // close account button
 
     let account_closed = false;
     const confirm_close_account = '.modal-footer > button.btn-danger';
