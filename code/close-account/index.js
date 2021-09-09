@@ -147,7 +147,7 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
 
     // remove cookie banner if present
     try {
-        page.waitForSelector('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary');
+        await page.waitForSelector('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary');
         await page.click('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary');
         await page.waitForTimeout(5000);
     } catch (e) {
@@ -163,7 +163,7 @@ async function enableTaxInheritance(page, secretdata, ACCOUNT_NAME) {
 
     // remove cookie banner if present
     try {
-        page.waitForSelector('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary');
+        await page.waitForSelector('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary');
         await page.click('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary');
     } catch (e) {
     }
