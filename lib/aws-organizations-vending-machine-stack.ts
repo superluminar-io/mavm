@@ -247,7 +247,9 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
             },
         });
         accountDeletionViaCodeBuildStep.addRetry({
-            maxAttempts: 100
+            maxAttempts: 99999999,
+            interval: cdk.Duration.hours(12),
+            backoffRate: 1.1,
         });
 
         const waitStepNew = new sfn.Wait(this, 'WaitForAccountDeletionNew', {
