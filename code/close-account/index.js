@@ -152,6 +152,14 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
         await page.waitForTimeout(5000);
     } catch (e) {
     }
+
+    // remove wizard if present
+    try {
+        await page.waitForTimeout(5000);
+        await page.waitForSelector('button[data-testid="awsc-nav-services-tooltip-confirm-button"]');
+        await page.click('button[data-testid="awsc-nav-services-tooltip-confirm-button"]');
+    } catch (e) {
+    }
 }
 
 async function enableTaxInheritance(page, secretdata, ACCOUNT_NAME) {
