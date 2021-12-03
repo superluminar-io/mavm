@@ -228,7 +228,7 @@ export class AwsOrganizationsVendingMachineStack extends cdk.Stack {
         closeAccountCodeCodeBuild.role?.addToPrincipalPolicy(new PolicyStatement(
             {
                 resources: ['*'],
-                actions: ['secretsmanager:GetSecretValue', 'dynamodb:*'], // TODO: least privilege
+                actions: ['secretsmanager:GetSecretValue', 'dynamodb:*', 'sts:AssumeRole'], // TODO: least privilege
             }
         ));
 
