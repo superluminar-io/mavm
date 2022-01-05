@@ -16,7 +16,7 @@ The MAVM ensures that several AWS accounts are in stock and ready to be vended.
 1. The Step Function iterates over the array.
 1. Each iteration starts a CodeBuild project (`code/create-account`) which tries to create a new AWS account via Puppeteer:<br>
    It registers with company and credit card data, which are stored in AWS Secrets Manager.<br>
-   It solves audio captchas with Amazon Transcribe or 2captcha.<br>
+   It solves audio captchas with 2captcha.<br>
    Phone verification is done via Amazon Connect.
 1. A cross-account IAM role with `AdministratorAccess` is created so that clients can programmatically interact with the account.
 1. Billing information is set: currency, invoice via email, billing contact email address.
