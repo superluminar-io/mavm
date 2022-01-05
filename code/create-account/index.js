@@ -434,6 +434,15 @@ async function signupCreditCard(page, secretdata, queueUrl3dSecure) {
     if (queueUrl3dSecure) {
         // 3D-Secure
         await page.waitForNavigation({'waitUntil': 'networkidle0'});
+
+        try {
+            await page.waitForSelector('input[name="divaMethod"][value="Phone"]:first-child', {timeout: 5000});
+            console.log("3D Secure check not requested, skipping");
+            return;
+        } catch (e) {
+
+        }
+
         const frame3DSecureElement = await page.waitForSelector('iframe:first-child');
         const frame3DSecure = await frame3DSecureElement.contentFrame();
         const tan3dSecureSelector = await frame3DSecure.waitForSelector('#challengeDataEntry', {
