@@ -64,7 +64,7 @@ const signup = async function () {
 
     await signupCreditCard(page, secretdata, QUEUE_URL_3D_SECURE);
 
-    await signupVerification(page, variables, ACCOUNT_NAME, ssm);
+    await signupVerification(page, variables, ACCOUNT_NAME, ssm, secretdata);
 
     await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
 
@@ -251,7 +251,7 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
     await page.waitForTimeout(8000);
 }
 
-async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
+async function signupVerification(page, variables, ACCOUNT_NAME, ssm, secretdata) {
 
     await page.waitForTimeout(10000); // wait for redirects to finish
 
@@ -264,56 +264,44 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
     var phonecode = "";
     var phonecodetext = "";
 
-    var captchanotdone = true;
-    var captchaattemptsfordiva = 0;
+    let captchanotdone = true;
+    let captchaattemptsfordiva = 0;
     while (captchanotdone) {
         captchaattemptsfordiva += 1;
         if (captchaattemptsfordiva > 10) {
             throw "Could not confirm phone number verification - possible error in DIVA system or credit card";
         }
+
+        await page.waitForTimeout(3000); // wait for captcha_image to be loaded
+        let recaptchaimg = await page.$('img[alt="captcha"]:first-child');
+        let recaptchaurl = await page.evaluate((obj) => {
+            return obj.getAttribute('src');
+        }, recaptchaimg);
+
+        let captcharesult = await solveCaptcha2captcha(page, recaptchaurl, secretdata.twocaptcha_apikey);
+
+        let input2 = await page.$('input[name="captchaGuess"]:first-child');
+
+        await input2.press('Backspace');
+        await input2.type(captcharesult, {delay: 100});
+
+        await page.waitForTimeout(3000);
+
+        let submitc = await page.$('#IdentityVerification > fieldset > awsui-button > button');
+        await submitc.click();
+
         try {
+            await page.waitForSelector('#phonePin', {timeout: 5000});
+            phonecode = await page.$('#phonePin');
+            phonecodetext = await page.evaluate(el => el.textContent, phonecode);
 
-            const captchaResponse = page.waitForResponse((response) => {
-                return response.url().startsWith("https://opfcaptcha-prod.s3.amazonaws.com/")
-            });
-
-            await page.waitForSelector('img[alt="Change to audio security check"]:first-child');
-            await page.click('img[alt="Change to audio security check"]:first-child');
-            await page.waitForTimeout(1000);
-
-            await page.waitForSelector('span[aria-label="Play Audio"]')
-            await page.click('span[aria-label="Play Audio"]')
-
-            await page.waitForTimeout(1000);
-
-            const audioCaptchaUrl = (await captchaResponse).url();
-            console.log('Audio captcha URL:', audioCaptchaUrl);
-
-            let solvedAudioCaptcha = await solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME);
-
-            let input32 = await page.$('input[name="captchaGuess"]:first-child');
-            await input32.press('Backspace');
-            await input32.type(solvedAudioCaptcha, {delay: 100});
-            await page.waitForTimeout(1000);
-
-            let submitc = await page.$('#IdentityVerification > fieldset > awsui-button > button');
-            await submitc.click();
-
-            try {
-                await page.waitForSelector('#phonePin', {timeout: 5000});
-                phonecode = await page.$('#phonePin');
-                phonecodetext = await page.evaluate(el => el.textContent, phonecode);
-
-                if (phonecodetext.trim().length == 4) {
-                    captchanotdone = false;
-                } else {
-                    await page.waitForTimeout(5000);
-                }
-            } catch (error) {
-                console.log('captcha probably not done, continue', error)
+            if (phonecodetext.trim().length == 4) {
+                captchanotdone = false;
+            } else {
+                await page.waitForTimeout(5000);
             }
         } catch (error) {
-            console.log(error);
+            console.log('captcha probably not done, continue', error)
         }
     }
 
