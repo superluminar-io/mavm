@@ -115,7 +115,7 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
         createAccountCodeProject.role?.addToPrincipalPolicy(new iam.PolicyStatement(
             {
                 resources: ['*'],
-                actions: ['secretsmanager:GetSecretValue', 'ssm:*Parameter*', 'sqs:*', 's3:*', 'transcribe:*', 'dynamodb:*', 'sts:*'], // TODO: least privilege
+                actions: ['secretsmanager:GetSecretValue', 'ssm:*Parameter*', 'sqs:*', 's3:*', 'dynamodb:*', 'sts:*'], // TODO: least privilege
             }
         ));
 
