@@ -60,7 +60,7 @@ const signup = async function () {
 
     await signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME);
 
-    await signupPageTwo(page, secretdata, variables);
+    await signupPageTwo(page, secretdata);
 
     await signupCreditCard(page, secretdata, QUEUE_URL_3D_SECURE);
 
@@ -184,9 +184,6 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm, secretdata
     await page.click('input[name="divaMethod"][value="Phone"]:first-child');
     await page.waitForTimeout(1000);
 
-    let portalphonenumber = await page.$('input[name="phoneNumber"]:first-child');
-    await portalphonenumber.press('Backspace');
-    await portalphonenumber.type(variables['PHONE_NUMBER'].replace("+1", ""), {delay: 100});
     var phonecode = "";
     var phonecodetext = "";
 
@@ -198,6 +195,17 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm, secretdata
             throw "Could not confirm phone number verification - possible error in DIVA system or credit card";
         }
 
+        let portalphonenumber = await page.$('input[name="phoneNumber"]:first-child');
+        await portalphonenumber.click({clickCount: 3}); // clear input
+        await portalphonenumber.press('Backspace')
+
+        const connectClient = new AWS.Connect({region: 'us-east-1'});
+        const availablePhoneNumbers = (await connectClient.listPhoneNumbers({InstanceId: process.env['CONNECT_INSTANCE_ID']}).promise())['PhoneNumberSummaryList'];
+        const randomPhoneNumber = availablePhoneNumbers[Math.floor(Math.random() * availablePhoneNumbers.length)].PhoneNumber;
+        console.log('chosen random phone number:', randomPhoneNumber);
+
+        await portalphonenumber.type(randomPhoneNumber.replace("+1", ""), {delay: 100});
+
         await page.waitForTimeout(3000); // wait for captcha_image to be loaded
         let recaptchaimg = await page.$('img[alt="captcha"]:first-child');
         let recaptchaurl = await page.evaluate((obj) => {
@@ -208,6 +216,7 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm, secretdata
 
         let input2 = await page.$('input[name="captchaGuess"]:first-child');
 
+        await input2.click({clickCount: 3}); // clear input
         await input2.press('Backspace');
         await input2.type(captcharesult, {delay: 100});
 
@@ -309,7 +318,7 @@ async function signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME) {
     await page.click('#CredentialCollection button:first-child');
 }
 
-async function signupPageTwo(page, secretdata, variables) {
+async function signupPageTwo(page, secretdata) {
 
     let solveCaptcha = false;
     try {
@@ -365,7 +374,12 @@ async function signupPageTwo(page, secretdata, variables) {
     await page.type('input[name="address.company"]:first-child', secretdata.company);
     await page.waitForTimeout(1000);
 
-    await page.type('input[name="address.phoneNumber"]:first-child', variables['PHONE_NUMBER'].replace('+1', '+1 '));
+    const connectClient = new AWS.Connect({region: 'us-east-1'});
+    const availablePhoneNumbers = (await connectClient.listPhoneNumbers({InstanceId: process.env['CONNECT_INSTANCE_ID']}).promise())['PhoneNumberSummaryList'];
+    const randomPhoneNumber = availablePhoneNumbers[Math.floor(Math.random() * availablePhoneNumbers.length)].PhoneNumber;
+    console.log('chosen random phone number:', randomPhoneNumber);
+
+    await page.type('input[name="address.phoneNumber"]:first-child', randomPhoneNumber);
     await page.waitForTimeout(1000);
 
     await page.click('#awsui-select-1 > div > awsui-icon > span'); // click country selection

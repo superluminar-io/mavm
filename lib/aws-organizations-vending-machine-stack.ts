@@ -36,6 +36,11 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
             description: "Currency for billing/invoice.",
         });
 
+        const connectInstanceId = new cdk.CfnParameter(this, "ConnectInstanceId", {
+            type: "String",
+            description: "Amazon Connect instance id.",
+        });
+
         const creditCard3SecureQueue = new sqs.Queue(this, 'CreditCard3SecureQueue', {
             retentionPeriod: cdk.Duration.minutes(1),
         });
@@ -110,12 +115,13 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
                 INVOICE_CURRENCY: {value: invoiceCurrency.valueAsString},
                 INVOICE_EMAIL: {value: invoiceEmail.valueAsString},
                 QUEUE_URL_3D_SECURE: {value: creditCard3SecureQueue.queueUrl},
+                CONNECT_INSTANCE_ID: {value: connectInstanceId.valueAsString},
             }
         });
         createAccountCodeProject.role?.addToPrincipalPolicy(new iam.PolicyStatement(
             {
                 resources: ['*'],
-                actions: ['secretsmanager:GetSecretValue', 'ssm:*Parameter*', 'sqs:*', 's3:*', 'dynamodb:*', 'sts:*'], // TODO: least privilege
+                actions: ['secretsmanager:GetSecretValue', 'ssm:*Parameter*', 'sqs:*', 's3:*', 'dynamodb:*', 'sts:*', 'connect:*'], // TODO: least privilege
             }
         ));
 
