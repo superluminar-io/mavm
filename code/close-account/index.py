@@ -10,6 +10,9 @@ import datetime
 import logging
 logging.basicConfig(level=logging.INFO)
 
+class AccountStillOpenException(Exception):
+    pass
+
 account_name = os.environ['ACCOUNT_NAME']
 account_email = os.environ['ACCOUNT_EMAIL']
 
@@ -22,6 +25,7 @@ secret_values = json.loads(sm.get_secret_value(SecretId='/aws-organizations-vend
 
 
 solver = Captcha2(api_key=secret_values['twocaptcha_apikey'])
+admin_role = 'arn:aws:iam::{}:role/OVMCrossAccountRole'.format(account_id)
 
 try:
     account_manager = AccountManager(account_email, secret_values['password'], 'eu-west-1', solver=solver)
@@ -29,7 +33,6 @@ try:
     account_manager.iam.billing_console_access = True
     time.sleep(10)
 
-    admin_role = 'arn:aws:iam::{}:role/OVMCrossAccountRole'.format(account_id)
     billing = Billing(admin_role)
 
     billing.tax.inheritance = True
@@ -40,6 +43,16 @@ try:
     billing.preferences.pdf_invoice_by_mail = True
 
     account_manager.terminate_account()
+
+    # check if account is really closed
+    time.sleep(120)
+    try:
+        sts = boto3.client('sts')
+        sts.assume_role(RoleArn=admin_role, RoleSessionName='OVM-CloseAccountCheck')
+        raise AccountStillOpenException("Account is still open")
+    except boto3.exceptions.botocore.exceptions.ClientError as e:
+        if e.response['Error']['Code'] != 'AccessDenied':
+            raise e
 except awsapilib.console.consoleexceptions.InvalidAuthentication as e:
     if not "Suspended" in str(e):
         raise e
