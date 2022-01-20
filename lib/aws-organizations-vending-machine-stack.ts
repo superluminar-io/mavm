@@ -15,8 +15,10 @@ import { aws_stepfunctions_tasks as tasks } from 'aws-cdk-lib';
 import { aws_codebuild as codebuild } from 'aws-cdk-lib';
 import { aws_s3_assets as s3_assets } from 'aws-cdk-lib';
 import * as httpapiint from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
+import { custom_resources } from 'aws-cdk-lib';
 
 import * as path from "path";
+import {PhysicalResourceIdReference} from "aws-cdk-lib/custom-resources";
 
 export class AwsOrganizationsVendingMachineStack extends Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -285,6 +287,39 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
         queueAccountDeletionFunction.addEventSource(new lambdaeventsources.DynamoEventSource(table, {
             startingPosition: lambda.StartingPosition.TRIM_HORIZON,
         }));
+
+        const connectInstance = new custom_resources.AwsCustomResource(this, 'ConnectInstance', {
+            onCreate: {
+                service: 'Connect',
+                action: 'createInstance',
+                region: 'us-east-1',
+                physicalResourceId: custom_resources.PhysicalResourceId.of('ConnectInstance'),
+                parameters: {
+                    IdentityManagementType: 'CONNECT_MANAGED',
+                    InboundCallsEnabled: true,
+                    InstanceAlias: 'mavm',
+                    OutboundCallsEnabled: false,
+                },
+            },
+            onDelete: {
+                service: 'Connect',
+                action: 'deleteInstance',
+                region: 'us-east-1',
+                physicalResourceId: custom_resources.PhysicalResourceId.of('ConnectInstance'),
+                parameters: {
+                    InstanceId: new PhysicalResourceIdReference(),
+                },
+            },
+
+            policy: custom_resources.AwsCustomResourcePolicy.fromStatements(
+                [
+                    new iam.PolicyStatement({
+                        resources: ['*'],
+                        actions: ['*'],
+                    }),
+                ]
+            ),
+        });
 
     }
 }
