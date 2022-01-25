@@ -6,18 +6,7 @@ import { Context, Callback } from 'aws-lambda';
 
 exports.handler = async (event: any, context: Context, callback: Callback) => {
 
-    const accounts: any = await dynamoDB.query(
-        {
-            ExpressionAttributeValues: {":status_created": "CREATED"},
-            KeyConditionExpression: "account_status = :status_created",
-            TableName: 'account',
-            IndexName: 'account_status',
-            Select: 'COUNT',
-        }
-    ).promise();
-
-    const vending_ceiling = parseInt(<string>process.env['VENDING_CEILING']);
-    let accounts_to_vend = vending_ceiling - accounts['Count'];
+    const accounts_to_vend = parseInt(<string>process.env['ACCOUNTS_TO_VEND']);
 
     let account_vending_list = [];
 

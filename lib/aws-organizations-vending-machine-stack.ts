@@ -1,10 +1,12 @@
-import { Stack } from 'aws-cdk-lib';
+import {aws_events_targets, Stack} from 'aws-cdk-lib';
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
 import { aws_iam as iam } from 'aws-cdk-lib';
 import { aws_s3 as s3 } from 'aws-cdk-lib';
 import { aws_sqs as sqs } from 'aws-cdk-lib';
+import { aws_events as events } from 'aws-cdk-lib';
+import { aws_events_targets as events_targets } from 'aws-cdk-lib';
 import { aws_lambda as lambda } from 'aws-cdk-lib';
 import { aws_lambda_nodejs as lambda_nodejs } from 'aws-cdk-lib';
 import { aws_dynamodb as dynamodb } from 'aws-cdk-lib';
@@ -23,11 +25,6 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
         super(scope, id, props);
 
-        const vendingCeiling = new cdk.CfnParameter(this, "VendingCeiling", {
-            type: "String",
-            description: "Number of AWS accounts to be made ready for vending.",
-            default: 10
-        });
         const invoiceEmail = new cdk.CfnParameter(this, "InvoiceEmail", {
             type: "String",
             description: "email address to send invoices to.",
@@ -151,8 +148,9 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
             },
         });
 
+        const WAITING_HOURS_BETWEEN_ACCOUNT_CREATION_CALLS = 2;
         const createAccountStateMachineWaitStep = new sfn.Wait(this, 'CreateAccountStateMachineWaitStep', {
-            time: sfn.WaitTime.duration(cdk.Duration.minutes(120))
+            time: sfn.WaitTime.duration(cdk.Duration.hours(WAITING_HOURS_BETWEEN_ACCOUNT_CREATION_CALLS))
         });
 
         createAccountStateMachineAccountCreationStep.addCatch(createAccountStateMachineWaitStep);
@@ -160,7 +158,7 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
         const accountNameProviderFunction = new lambda_nodejs.NodejsFunction(this, 'AccountNameProviderFunction', {
             entry: 'code/account-name-provider.ts',
             environment: {
-                VENDING_CEILING: vendingCeiling.valueAsString,
+                ACCOUNTS_TO_VEND: (24 / WAITING_HOURS_BETWEEN_ACCOUNT_CREATION_CALLS).toString(),
             },
             timeout: cdk.Duration.minutes(1),
         });
@@ -191,6 +189,12 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
                     .next(createAccountStateMachineMapStep)
             }
         );
+
+        const createAccountStateMachineRule = new events.Rule(this, 'CreateAccountStateMachineRule', {
+            schedule: events.Schedule.rate(cdk.Duration.days(1)),
+        });
+
+        createAccountStateMachineRule.addTarget(new events_targets.SfnStateMachine(createAccountStateMachine));
 
         const table = new dynamodb.Table(this, "AccountsTable", {
             tableName: 'account', // don't hardcode once env can be passed to canary
