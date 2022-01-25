@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
 import { aws_iam as iam } from 'aws-cdk-lib';
+import { aws_s3 as s3 } from 'aws-cdk-lib';
 import { aws_sqs as sqs } from 'aws-cdk-lib';
 import { aws_lambda as lambda } from 'aws-cdk-lib';
 import { aws_lambda_nodejs as lambda_nodejs } from 'aws-cdk-lib';
@@ -105,6 +106,15 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
             ],
         });
 
+        const bucketForTranscribe = new s3.Bucket(this, 'BucketForTranscribe', {
+            lifecycleRules: [
+                {
+                    expiration: cdk.Duration.days(1),
+                },
+            ],
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+        });
+
         const createAccountCodeProject = new codebuild.Project(this, 'CreateAccountCodeProject', {
             source: codebuild.Source.s3({
                 bucket: createAccountCodeAsset.bucket,
@@ -116,12 +126,13 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
                 INVOICE_EMAIL: {value: invoiceEmail.valueAsString},
                 QUEUE_URL_3D_SECURE: {value: creditCard3SecureQueue.queueUrl},
                 CONNECT_INSTANCE_ID: {value: connectInstanceId.valueAsString},
+                BUCKET_FOR_TRANSCRIBE: {value: bucketForTranscribe.bucketName},
             }
         });
         createAccountCodeProject.role?.addToPrincipalPolicy(new iam.PolicyStatement(
             {
                 resources: ['*'],
-                actions: ['secretsmanager:GetSecretValue', 'ssm:*Parameter*', 'sqs:*', 's3:*', 'dynamodb:*', 'sts:*', 'connect:*'], // TODO: least privilege
+                actions: ['secretsmanager:GetSecretValue', 'ssm:*Parameter*', 'sqs:*', 's3:*', 'dynamodb:*', 'sts:*', 'connect:*', 'transcribe:*'], // TODO: least privilege
             }
         ));
 
@@ -286,5 +297,8 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
             startingPosition: lambda.StartingPosition.TRIM_HORIZON,
         }));
 
+        new cdk.CfnOutput(this, 'BucketForTranscribeOutput', {
+            value: bucketForTranscribe.bucketName,
+        });
     }
 }

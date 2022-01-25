@@ -14,6 +14,8 @@ const ACCOUNT_NAME = process.env['ACCOUNT_NAME'];
 const ACCOUNT_EMAIL = process.env['ACCOUNT_EMAIL'];
 
 const QUEUE_URL_3D_SECURE = process.env['QUEUE_URL_3D_SECURE'];
+const BUCKET_FOR_TRANSCRIBE = process.env['BUCKET_FOR_TRANSCRIBE'];
+
 
 async function checkIfAccountIsReady(accountId) {
     const sts = new AWS.STS();
@@ -64,7 +66,7 @@ const signup = async function () {
 
     await signupCreditCard(page, secretdata, QUEUE_URL_3D_SECURE);
 
-    await signupVerification(page, variables, ACCOUNT_NAME, ssm, secretdata);
+    await signupVerification(page, variables, ACCOUNT_NAME, ssm);
 
     await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
 
@@ -104,6 +106,80 @@ const httpGetBinary = url => {
         }).on('error', reject);
     });
 };
+
+async function solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME) {
+
+    const s3 = new AWS.S3();
+    const transcribe = new AWS.TranscribeService();
+
+    let audioCaptchaUrlResult = await httpGetBinary(audioCaptchaUrl);
+    let audioCaptchaUrlTempDir = fs.mkdtempSync('/tmp/audiocaptcha');
+    let audioCaptchaUrlFilename = audioCaptchaUrlTempDir + '/audiocaptcha.mp3';
+    fs.writeFileSync(audioCaptchaUrlFilename, audioCaptchaUrlResult);
+
+    const { v4: uuidv4 } = require('uuid');
+    const randomSuffix = uuidv4().split('-')[0];
+    const transcriptionJobName = ACCOUNT_NAME + randomSuffix;
+    const s3Key = transcriptionJobName + '.mp3'
+    const s3Bucket = BUCKET_FOR_TRANSCRIBE;
+    await s3.upload({
+            'Bucket': s3Bucket,
+            'Body': fs.readFileSync(audioCaptchaUrlFilename),
+            'Key': s3Key,
+        }
+    ).promise();
+
+    let audioCaptchaS3Uri = `s3://${s3Bucket}/${s3Key}`;
+    await transcribe.startTranscriptionJob(
+        {
+            TranscriptionJobName: transcriptionJobName,
+            Media: {
+                MediaFileUri: audioCaptchaS3Uri
+            },
+            LanguageCode: "en-US",
+        }
+    ).promise();
+
+    let transScribeJobfinished = false;
+    let transScribeResultUrl = '';
+    while (!transScribeJobfinished) {
+        let transScribeJob = await transcribe.getTranscriptionJob(
+            {
+                TranscriptionJobName: transcriptionJobName,
+            }
+        ).promise();
+        if (transScribeJob.TranscriptionJob.TranscriptionJobStatus === 'COMPLETED') {
+            transScribeResultUrl = transScribeJob.TranscriptionJob.Transcript.TranscriptFileUri;
+            break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 5000)); // one does not simply sleep() in node
+    }
+
+    let data = await httpGet(transScribeResultUrl);
+    let audioCaptchaTranscribeResult = JSON.parse(data);
+
+    let solvedAudioCaptcha = '';
+
+    audioCaptchaTranscribeResult.results.items.forEach(item => {
+
+        function wordsToNumbers(content) {
+            const numbers = ['zero', 'one', 'two', 'three', 'for', 'five', 'six', 'seven', 'eight', 'nine'];
+            const key = numbers.indexOf(content.toLowerCase());
+            if (key !== -1) {
+                return key;
+            }
+            return '';
+        }
+
+        if (!isNaN(parseInt(item.alternatives[0].content))) {
+            solvedAudioCaptcha += item.alternatives[0].content;
+        } else {
+            solvedAudioCaptcha += wordsToNumbers(item.alternatives[0].content);
+        }
+    });
+    console.debug("Resolved audio captcha: " + solvedAudioCaptcha)
+    return solvedAudioCaptcha;
+}
 
 async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
     // log in to get account id
@@ -177,7 +253,7 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
     await page.waitForTimeout(8000);
 }
 
-async function signupVerification(page, variables, ACCOUNT_NAME, ssm, secretdata) {
+async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
 
     await page.waitForTimeout(10000); // wait for redirects to finish
 
@@ -207,20 +283,29 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm, secretdata
         await portalphonenumber.type(randomPhoneNumber.replace("+1", ""), {delay: 100});
 
         await page.waitForTimeout(3000); // wait for captcha_image to be loaded
-        let recaptchaimg = await page.$('img[alt="captcha"]:first-child');
-        let recaptchaurl = await page.evaluate((obj) => {
-            return obj.getAttribute('src');
-        }, recaptchaimg);
 
-        let captcharesult = await solveCaptcha2captcha(page, recaptchaurl, secretdata.twocaptcha_apikey);
+        const captchaResponse = page.waitForResponse((response) => {
+            return response.url().startsWith("https://opfcaptcha-prod.s3.amazonaws.com/")
+        });
 
-        let input2 = await page.$('input[name="captchaGuess"]:first-child');
+        await page.waitForSelector('img[alt="Change to audio security check"]:first-child');
+        await page.click('img[alt="Change to audio security check"]:first-child');
+        await page.waitForTimeout(1000);
 
-        await input2.click({clickCount: 3}); // clear input
-        await input2.press('Backspace');
-        await input2.type(captcharesult, {delay: 100});
+        await page.waitForSelector('span[aria-label="Play Audio"]')
+        await page.click('span[aria-label="Play Audio"]')
 
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(1000);
+
+        const audioCaptchaUrl = (await captchaResponse).url();
+        console.log('Audio captcha URL:', audioCaptchaUrl);
+
+        let solvedAudioCaptcha = await solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME);
+
+        let input32 = await page.$('input[name="captchaGuess"]:first-child');
+        await input32.press('Backspace');
+        await input32.type(solvedAudioCaptcha, {delay: 100});
+        await page.waitForTimeout(1000);
 
         let submitc = await page.$('#IdentityVerification > fieldset > awsui-button > button');
         await submitc.click();
@@ -339,17 +424,29 @@ async function signupPageTwo(page, secretdata) {
             }
 
             await page.waitForTimeout(3000); // wait for captcha_image to be loaded
-            let recaptchaimg = await page.$('img[alt="captcha"]:first-child');
-            let recaptchaurl = await page.evaluate((obj) => {
-                return obj.getAttribute('src');
-            }, recaptchaimg);
 
-            let captcharesult = await solveCaptcha2captcha(page, recaptchaurl, secretdata.twocaptcha_apikey);
+            const captchaResponse = page.waitForResponse((response) => {
+                return response.url().startsWith("https://opfcaptcha-prod.s3.amazonaws.com/")
+            });
+
+            await page.waitForSelector('img[alt="Change to audio security check"]:first-child');
+            await page.click('img[alt="Change to audio security check"]:first-child');
+            await page.waitForTimeout(1000);
+
+            await page.waitForSelector('span[aria-label="Play Audio"]')
+            await page.click('span[aria-label="Play Audio"]')
+
+            await page.waitForTimeout(1000);
+
+            const audioCaptchaUrl = (await captchaResponse).url();
+            console.log('Audio captcha URL:', audioCaptchaUrl);
+
+            let solvedAudioCaptcha = await solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME);
 
             let input2 = await page.$('input[name="captchaGuess"]:first-child');
 
             await input2.press('Backspace');
-            await input2.type(captcharesult, {delay: 100});
+            await input2.type(solvedAudioCaptcha, {delay: 100});
 
             await page.waitForTimeout(3000);
 
