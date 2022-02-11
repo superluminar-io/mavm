@@ -598,9 +598,14 @@ async function signupCreditCard(page, secretdata, queueUrl3dSecure) {
 }
 
 async function createCrossAccountRole(page, PRINCIPAL) {
+
+    // remove cookie banner so that it's possible to click on the submit button later, otherwise the UI thinks the button cannot be clicked
+    await page.$eval('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary', e => e.click());
+    await page.waitForTimeout(5000);
+
     const crossAccountRole = 'OVMCrossAccountRole';
 
-    let init = util.format('https://console.aws.amazon.com/iam/home?region=eu-west-1#/roles$new?step=review&roleType=crossAccount&accountID=%s&policies=arn:aws:iam::aws:policy%2FAdministratorAccess', PRINCIPAL)
+    let init = util.format('https://console.aws.amazon.com/iamv2/home#/roles/create?awsAccount=%s&step=review&trustedEntityType=AWS_ACCOUNT', PRINCIPAL);
 
     // log in to get account id
     await page.goto(init, {
@@ -608,26 +613,35 @@ async function createCrossAccountRole(page, PRINCIPAL) {
         waitUntil: ['domcontentloaded']
     });
 
-    let selector = '#iam-content > roleslist > parent-view > div.ng-scope > new-role-wizard > wizard > div > div.wizard-body > div > div.wizard-footer.wizard-footer-height > div.buttons > awsui-button.wizard-next-button > button'
+    const nextButtonSelector = '#role-creation-wizard > div > div.awsui-wizard__column-form > div.wizard-step.wizard-step__active > awsui-form > div > div.awsui-form-actions > span > div > awsui-button.awsui-wizard__primary-button > button';
+    await page.waitForSelector(nextButtonSelector, {timeout: 5000});
+    await page.click(nextButtonSelector);
 
-    await page.waitForSelector(selector, {timeout: 5000});
-    await page.click(selector);
+    await page.waitForSelector('#awsui-autosuggest-0', {timeout: 5000});
+    await page.click('#awsui-autosuggest-0');
+    await page.waitForTimeout(2000);
+    await page.type('#awsui-autosuggest-0', 'AdministratorAccess');
+    await page.waitForTimeout(1000);
+
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(2000);
+
+    await page.waitForSelector('#awsui-checkbox-1', {timeout: 5000});
+    const checkbox = await page.$('#RoleCreate-AttachPoliciesTable > awsui-table > div > div.awsui-table-container > table > tbody > tr:nth-child(1) > td.awsui-table-selection-area > awsui-checkbox input');
+    await checkbox.evaluate(b => b.click());
+
+    await page.waitForTimeout(2000);
+    await page.waitForSelector(nextButtonSelector, {timeout: 5000});
+    await page.click(nextButtonSelector);
+
+    await page.waitForSelector('#awsui-input-0', {timeout: 5000});
+    await page.type('#awsui-input-0', crossAccountRole);
+
+    await page.waitForTimeout(2000);
+    await page.waitForSelector(nextButtonSelector, {timeout: 5000});
+    await page.click(nextButtonSelector);
+
     await page.waitForTimeout(10000);
-
-    await page.waitForSelector(selector, {timeout: 5000});
-    await page.click(selector);
-
-    await page.waitForSelector(selector, {timeout: 5000});
-    await page.click(selector);
-
-    await page.waitForSelector('#awsui-textfield-13');
-    await page.type('#awsui-textfield-13', crossAccountRole, {delay: 100});
-    await page.waitForTimeout(5000);
-
-    // click on "create role"
-    await page.waitForSelector(selector, {timeout: 5000});
-    await page.click(selector);
-    await page.waitForTimeout(5000);
 }
 
 async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
