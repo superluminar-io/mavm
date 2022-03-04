@@ -1,4 +1,12 @@
-import {aws_events_targets, Stack} from 'aws-cdk-lib';
+import {
+    aws_events_targets,
+    aws_logs,
+    aws_route53,
+    aws_s3_notifications,
+    aws_ses,
+    aws_ses_actions,
+    Stack
+} from 'aws-cdk-lib';
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -20,6 +28,7 @@ import { aws_s3_assets as s3_assets } from 'aws-cdk-lib';
 import * as httpapiint from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
 
 import * as path from "path";
+import {AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId} from "aws-cdk-lib/custom-resources";
 
 export class AwsOrganizationsVendingMachineStack extends Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -37,6 +46,14 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
         const connectInstanceId = new cdk.CfnParameter(this, "ConnectInstanceId", {
             type: "String",
             description: "Amazon Connect instance id.",
+        });
+
+        const managementAccountRootEmailDnsHostedZoneId = new cdk.CfnParameter(this, "ManagementAccountRootEmailDnsHostedZoneId", {
+            type: "String",
+        });
+
+        const managementAccountRootEmailDnsHostedZoneName = new cdk.CfnParameter(this, "ManagementAccountRootEmailDnsHostedZoneName", {
+            type: "String",
         });
 
         const creditCard3SecureQueue = new sqs.Queue(this, 'CreditCard3SecureQueue', {
@@ -112,6 +129,10 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
             removalPolicy: cdk.RemovalPolicy.DESTROY,
         });
 
+        const managementAccountRootMailEmailVerificationQueue = new sqs.Queue(this, 'ManagementAccountRootMailEmailVerificationQueue', {
+            retentionPeriod: cdk.Duration.minutes(1),
+        });
+
         const createAccountCodeProject = new codebuild.Project(this, 'CreateAccountCodeProject', {
             source: codebuild.Source.s3({
                 bucket: createAccountCodeAsset.bucket,
@@ -122,6 +143,7 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
                 INVOICE_CURRENCY: {value: invoiceCurrency.valueAsString},
                 INVOICE_EMAIL: {value: invoiceEmail.valueAsString},
                 QUEUE_URL_3D_SECURE: {value: creditCard3SecureQueue.queueUrl},
+                QUEUE_URL_MAIL_VERIFICATION: {value: managementAccountRootMailEmailVerificationQueue.queueUrl},
                 CONNECT_INSTANCE_ID: {value: connectInstanceId.valueAsString},
                 BUCKET_FOR_TRANSCRIBE: {value: bucketForTranscribe.bucketName},
             }
@@ -158,6 +180,7 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
         const accountNameProviderFunction = new lambda_nodejs.NodejsFunction(this, 'AccountNameProviderFunction', {
             entry: 'code/account-name-provider.ts',
             environment: {
+                ACCOUNT_ROOT_EMAIL_PATTERN: 'root+%s@' + managementAccountRootEmailDnsHostedZoneName.valueAsString,
                 ACCOUNTS_TO_VEND: (24 / WAITING_HOURS_BETWEEN_ACCOUNT_CREATION_CALLS).toString(),
             },
             timeout: cdk.Duration.minutes(1),
@@ -300,6 +323,142 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
         queueAccountDeletionFunction.addEventSource(new lambdaeventsources.DynamoEventSource(table, {
             startingPosition: lambda.StartingPosition.TRIM_HORIZON,
         }));
+
+        const s3bucketForManagementAccountRootMail = new s3.Bucket(this, 'ManagementAccountRootMailBucket', {
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+            lifecycleRules: [
+                {
+                    expiration: cdk.Duration.days(1),
+                },
+            ],
+        });
+        s3bucketForManagementAccountRootMail.addToResourcePolicy(new iam.PolicyStatement(
+            {
+                resources: [`${s3bucketForManagementAccountRootMail.bucketArn}/*`],
+                actions: ['s3:PutObject'],
+                principals: [new iam.ServicePrincipal('ses.amazonaws.com')],
+                conditions: {
+                    'StringEquals': {
+                        'aws:Referer': "${AWS::AccountId}",
+                    }
+                }
+            }
+        ));
+
+        s3bucketForManagementAccountRootMail.addEventNotification(s3.EventType.OBJECT_CREATED_PUT, new aws_s3_notifications.SqsDestination(managementAccountRootMailEmailVerificationQueue));
+
+        // RootMail setup
+        const dnsZoneForManagementAccountRootEmail =  aws_route53.HostedZone.fromHostedZoneAttributes(this, 'ManagementAccountRootEmailDnsZone', {hostedZoneId: managementAccountRootEmailDnsHostedZoneId.valueAsString, zoneName: managementAccountRootEmailDnsHostedZoneName.valueAsString});
+
+        new aws_route53.MxRecord(this, "ManagementAccountRootEmailDnsZoneMxRecord", {
+            zone: dnsZoneForManagementAccountRootEmail,
+            values: [{
+                hostName: "inbound-smtp.eu-west-1.amazonaws.com",
+                priority: 10
+            }],
+        });
+
+        const domainName = dnsZoneForManagementAccountRootEmail.zoneName;
+        const emailAddress = 'root@' + domainName;
+        const managementAccountRootEmailSesRuleset = new aws_ses.ReceiptRuleSet(this, 'ManagementAccountRootEmailSesRuleset', {
+            rules: [
+                {
+                    recipients: [emailAddress],
+                    actions: [
+                        new aws_ses_actions.S3({
+                            bucket: s3bucketForManagementAccountRootMail,
+                        }),
+                    ],
+                },
+            ],
+        });
+
+        new AwsCustomResource(this, 'ManagementAccountRootEmailSesRulesetEnable', {
+            logRetention: aws_logs.RetentionDays.ONE_DAY,
+            installLatestAwsSdk: false,
+            onCreate: {
+                service: 'SES',
+                action: 'setActiveReceiptRuleSet',
+                parameters: {
+                    RuleSetName: managementAccountRootEmailSesRuleset.receiptRuleSetName,
+                },
+                physicalResourceId: PhysicalResourceId.of('enable-rule-set-on-create'),
+            },
+            onDelete: {
+                service: 'SES',
+                action: 'setActiveReceiptRuleSet',
+                parameters: {},
+                physicalResourceId: PhysicalResourceId.of('disable-rule-set-on-delete'),
+            },
+            policy: AwsCustomResourcePolicy.fromStatements([
+                new iam.PolicyStatement({
+                    actions: ['ses:SetActiveReceiptRuleSet'],
+                    effect: iam.Effect.ALLOW,
+                    resources: ['*'],
+                }),
+            ]),
+        });
+
+        new AwsCustomResource(this, 'ManagementAccountRootEmailSesIdentity', {
+            onCreate: {
+                service: 'SES',
+                action: 'verifyEmailIdentity',
+                parameters: {
+                    EmailAddress: emailAddress,
+                },
+                physicalResourceId: PhysicalResourceId.of('ManagementAccountRootEmailSesVerifier'),
+            },
+            onDelete: {
+                service: 'SES',
+                action: 'deleteIdentity',
+                parameters: {
+                    Identity: emailAddress,
+                },
+            },
+            policy: AwsCustomResourcePolicy.fromStatements([
+                new iam.PolicyStatement({
+                    actions: ['ses:verifyEmailIdentity'],
+                    effect: iam.Effect.ALLOW,
+                    resources: ['*'],
+                }),
+            ]),
+        });
+
+        const verifyDomainDkim = new AwsCustomResource(this, 'VerifyDomainDkim', {
+            onCreate: {
+                service: 'SES',
+                action: 'verifyDomainDkim',
+                parameters: {
+                    Domain: domainName,
+                },
+                physicalResourceId: PhysicalResourceId.of('ManagementAccountRootEmailSesDkimVerifier'),
+            },
+            onUpdate: {
+                service: 'SES',
+                action: 'verifyDomainDkim',
+                parameters: {
+                    Domain: domainName,
+                },
+                physicalResourceId: PhysicalResourceId.of('ManagementAccountRootEmailSesDkimVerifier'),
+            },
+            policy: AwsCustomResourcePolicy.fromStatements([
+                new iam.PolicyStatement({
+                    actions: ['ses:VerifyDomainDkim'],
+                    effect: iam.Effect.ALLOW,
+                    resources: ['*'],
+                }),
+            ]),
+        });
+
+        [0, 1, 2].forEach((val) => {
+            const dkimToken = verifyDomainDkim.getResponseField(`DkimTokens.${val}`);
+            const cnameRecord = new aws_route53.CnameRecord(this, 'ManagementAccountRootEmailSesDkimVerifierRecord' + val, {
+                zone: dnsZoneForManagementAccountRootEmail,
+                recordName: `${dkimToken}._domainkey.${domainName}`,
+                domainName: `${dkimToken}.dkim.amazonses.com`,
+            });
+            cnameRecord.node.addDependency(verifyDomainDkim);
+        });
 
         new cdk.CfnOutput(this, 'BucketForTranscribeOutput', {
             value: bucketForTranscribe.bucketName,

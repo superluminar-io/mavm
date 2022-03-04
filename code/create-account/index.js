@@ -14,6 +14,7 @@ const ACCOUNT_NAME = process.env['ACCOUNT_NAME'];
 const ACCOUNT_EMAIL = process.env['ACCOUNT_EMAIL'];
 
 const QUEUE_URL_3D_SECURE = process.env['QUEUE_URL_3D_SECURE'];
+const QUEUE_URL_MAIL_VERIFICATION = process.env['QUEUE_URL_MAIL_VERIFICATION'];
 const BUCKET_FOR_TRANSCRIBE = process.env['BUCKET_FOR_TRANSCRIBE'];
 
 
@@ -388,19 +389,59 @@ async function signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME) {
 
     // remove cookie banner so that it's possible to click on the submit button later, otherwise the UI thinks the button cannot be clicked
     await page.$eval('#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary', e => e.click());
-    await page.waitForTimeout(5000);
 
-    await page.type('#awsui-input-0', ACCOUNT_EMAIL);
+    await page.waitForSelector('input[name="emailAddress"]:first-child');
+    await page.type('input[name="emailAddress"]:first-child', ACCOUNT_EMAIL);
     await page.waitForTimeout(1000);
-    await page.type('#awsui-input-1', secretdata.password);
-    await page.waitForTimeout(1000);
-    await page.type('#awsui-input-2', secretdata.password);
-    await page.waitForTimeout(1000);
-    await page.type('#awsui-input-3', ACCOUNT_NAME);
 
+    let accountNameSelector = await page.$('input[name="fullName"]:first-child');
+    await page.waitForTimeout(1000);
+    await accountNameSelector.click({clickCount: 3});
+    await accountNameSelector.type(ACCOUNT_NAME);
+    await page.waitForTimeout(1000);
+
+    await page.click('#EmailValidationSendOTP button:first-child');
+
+    // retrieve SMS result from SQS queue
+    const sqs = new AWS.SQS();
+    const sqsMessage = await sqs.receiveMessage({
+        QueueUrl: QUEUE_URL_MAIL_VERIFICATION,
+        MaxNumberOfMessages: 1,
+        WaitTimeSeconds: 20,
+    }).promise();
+
+    if (typeof sqsMessage.Messages === 'undefined') {
+        throw 'Could not read 3d secure tan from SQS queue.';
+    }
+
+    const sqsMessageBody = JSON.parse(sqsMessage.Messages[0].Body);
+    const sqsMessageS3 = sqsMessageBody.Records[0].s3;
+
+    const s3 = new AWS.S3();
+    const mailMessage = await s3.getObject({
+        Bucket: sqsMessageS3.bucket.name,
+        Key: sqsMessageS3.object.key
+    }).promise();
+    const mail = mailMessage.Body.toString('utf-8');
+    await sqs.deleteMessage({
+        QueueUrl: QUEUE_URL_MAIL_VERIFICATION,
+        ReceiptHandle: sqsMessage.Messages[0].ReceiptHandle
+    }).promise();
+
+    const verificationCode = mail.match(/Verification code:\s*([\d]+)/ms)[1];
+    await page.type('#awsui-input-2', verificationCode);
+    await page.waitForTimeout(1000);
+    await page.click('#EmailValidationVerifyOTP button:first-child');
+
+    await page.waitForSelector('input[name="password"]:first-child');
+    await page.type('input[name="password"]:first-child', secretdata.password);
+    await page.waitForTimeout(1000);
+    await page.type('input[name="rePassword"]:first-child', secretdata.password);
     await page.waitForTimeout(1000);
 
     await page.click('#CredentialCollection button:first-child');
+    await page.waitForTimeout(5000);
+    await page.click('#CredentialCollection > fieldset > awsui-button:nth-child(7) > button');
 }
 
 async function signupPageTwo(page, secretdata) {

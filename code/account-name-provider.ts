@@ -4,6 +4,8 @@ const util = require('util');
 const dynamoDB: AWS.DynamoDB.DocumentClient = new AWS.DynamoDB.DocumentClient();
 import { Context, Callback } from 'aws-lambda';
 
+const ACCOUNT_ROOT_EMAIL_PATTERN = <string>process.env['ACCOUNT_ROOT_EMAIL_PATTERN'];
+
 exports.handler = async (event: any, context: Context, callback: Callback) => {
 
     const accounts_to_vend = parseInt(<string>process.env['ACCOUNTS_TO_VEND']);
@@ -12,7 +14,7 @@ exports.handler = async (event: any, context: Context, callback: Callback) => {
 
     for (let i = 0; i < accounts_to_vend; ++i) {
         const random_suffix = uuidv4().split('-')[0];
-        const account_email = `superwerker-aws-test+${random_suffix}@superluminar.io`;
+        const account_email = util.format(ACCOUNT_ROOT_EMAIL_PATTERN, random_suffix);
         const account_name = util.format('ovm-%s', random_suffix);
 
         const account_to_create = {
