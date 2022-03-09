@@ -411,7 +411,7 @@ async function signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME) {
     }).promise();
 
     if (typeof sqsMessage.Messages === 'undefined') {
-        throw 'Could not read 3d secure tan from SQS queue.';
+        throw 'Could not read signup confirmation code mail from SQS queue.';
     }
 
     const sqsMessageBody = JSON.parse(sqsMessage.Messages[0].Body);
