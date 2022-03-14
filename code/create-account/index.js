@@ -54,7 +54,7 @@ const signup = async function () {
 
     let variables = JSON.parse(connectssmparameter['Parameter']['Value']);
 
-    const browser = await puppeteer.launch({args: ['--no-sandbox', '--disable-web-security', '--disable-features=IsolateOrigins,site-per-process']});
+    const browser = await puppeteer.launch({args: ['--disable-audio-output', '--no-sandbox', '--disable-web-security', '--disable-features=IsolateOrigins,site-per-process']});
     const page = await browser.newPage();
 
     // remove indicators that we are running headless
