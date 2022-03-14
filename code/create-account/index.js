@@ -402,50 +402,6 @@ async function signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME) {
 
     await page.click('#EmailValidationSendOTP button:first-child');
 
-    // retrieve SMS result from SQS queue
-    const sqs = new AWS.SQS();
-    const sqsMessage = await sqs.receiveMessage({
-        QueueUrl: QUEUE_URL_MAIL_VERIFICATION,
-        MaxNumberOfMessages: 1,
-        WaitTimeSeconds: 20,
-    }).promise();
-
-    if (typeof sqsMessage.Messages === 'undefined') {
-        throw 'Could not read signup confirmation code mail from SQS queue.';
-    }
-
-    const sqsMessageBody = JSON.parse(sqsMessage.Messages[0].Body);
-    const sqsMessageS3 = sqsMessageBody.Records[0].s3;
-
-    const s3 = new AWS.S3();
-    const mailMessage = await s3.getObject({
-        Bucket: sqsMessageS3.bucket.name,
-        Key: sqsMessageS3.object.key
-    }).promise();
-    const mail = mailMessage.Body.toString('utf-8');
-    await sqs.deleteMessage({
-        QueueUrl: QUEUE_URL_MAIL_VERIFICATION,
-        ReceiptHandle: sqsMessage.Messages[0].ReceiptHandle
-    }).promise();
-
-    const verificationCode = mail.match(/Verification code:\s*([\d]+)/ms)[1];
-    await page.type('#awsui-input-2', verificationCode);
-    await page.waitForTimeout(1000);
-    await page.click('#EmailValidationVerifyOTP button:first-child');
-
-    await page.waitForSelector('input[name="password"]:first-child');
-    await page.type('input[name="password"]:first-child', secretdata.password);
-    await page.waitForTimeout(1000);
-    await page.type('input[name="rePassword"]:first-child', secretdata.password);
-    await page.waitForTimeout(1000);
-
-    await page.click('#CredentialCollection button:first-child');
-    await page.waitForTimeout(5000);
-    await page.click('#CredentialCollection > fieldset > awsui-button:nth-child(7) > button');
-}
-
-async function signupPageTwo(page, secretdata) {
-
     let solveCaptcha = false;
     try {
         await page.waitForSelector('#captchaGuess', {timeout: 5000, visible: true});
@@ -491,16 +447,60 @@ async function signupPageTwo(page, secretdata) {
 
             await page.waitForTimeout(3000);
 
-            await page.click('#CredentialCollection > fieldset > awsui-button > button');
+            await page.click('#EmailValidationSendOTP > fieldset > awsui-button > button');
 
             try {
-                await page.waitForSelector('#awsui-radio-button-1', {timeout: 10000});
+                await page.waitForSelector('#EmailValidationVerifyOTP', {timeout: 10000});
                 captchanotdone = false
             } catch {
                 console.log("captcha not solved, trying again")
             }
         }
     }
+
+    // retrieve SMS result from SQS queue
+    const sqs = new AWS.SQS();
+    const sqsMessage = await sqs.receiveMessage({
+        QueueUrl: QUEUE_URL_MAIL_VERIFICATION,
+        MaxNumberOfMessages: 1,
+        WaitTimeSeconds: 20,
+    }).promise();
+
+    if (typeof sqsMessage.Messages === 'undefined') {
+        throw 'Could not read signup confirmation code mail from SQS queue.';
+    }
+
+    const sqsMessageBody = JSON.parse(sqsMessage.Messages[0].Body);
+    const sqsMessageS3 = sqsMessageBody.Records[0].s3;
+
+    const s3 = new AWS.S3();
+    const mailMessage = await s3.getObject({
+        Bucket: sqsMessageS3.bucket.name,
+        Key: sqsMessageS3.object.key
+    }).promise();
+    const mail = mailMessage.Body.toString('utf-8');
+    await sqs.deleteMessage({
+        QueueUrl: QUEUE_URL_MAIL_VERIFICATION,
+        ReceiptHandle: sqsMessage.Messages[0].ReceiptHandle
+    }).promise();
+
+    const verificationCode = mail.match(/Verification code:\s*([\d]+)/ms)[1];
+    await page.type('#otp input:first-child', verificationCode);
+    await page.waitForTimeout(1000);
+    await page.click('#EmailValidationVerifyOTP button:first-child');
+
+    await page.waitForSelector('input[name="password"]:first-child');
+    await page.type('input[name="password"]:first-child', secretdata.password);
+    await page.waitForTimeout(1000);
+    await page.type('input[name="rePassword"]:first-child', secretdata.password);
+    await page.waitForTimeout(1000);
+
+    await page.click('#CredentialCollection button:first-child');
+    await page.waitForTimeout(5000);
+    await page.click('#CredentialCollection > fieldset > awsui-button:nth-child(7) > button');
+}
+
+async function signupPageTwo(page, secretdata) {
 
     await page.waitForSelector('#awsui-radio-button-1', {timeout: 5000});
     await page.click('#awsui-radio-button-1')
