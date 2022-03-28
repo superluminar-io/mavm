@@ -23,8 +23,7 @@ account_id = account_info['account_id']['S']
 sm = boto3.client('secretsmanager')
 secret_values = json.loads(sm.get_secret_value(SecretId='/aws-organizations-vending-machine/ccdata')['SecretString'])
 
-
-solver = Captcha2(api_key=secret_values['twocaptcha_apikey'])
+solver = Captcha2(secret_values['twocaptcha_apikey'])
 admin_role = 'arn:aws:iam::{}:role/OVMCrossAccountRole'.format(account_id)
 
 try:

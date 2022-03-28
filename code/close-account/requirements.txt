@@ -1,2 +1,2 @@
 boto3
-awsapilib==1.0.0
+-e git+https://github.com/superwerker/awsapilib.git@fix-login-flow#egg=awsapilib
