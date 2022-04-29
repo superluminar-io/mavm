@@ -1,2 +1,2 @@
 boto3
--e git+https://github.com/superwerker/awsapilib.git@fix-pdf-by-invoice#egg=awsapilib
+awsapilib==2.2.0
