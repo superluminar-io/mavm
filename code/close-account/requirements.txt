@@ -1,2 +1,2 @@
 boto3
-awsapilib==2.2.0
+awsapilib==2.3.0
