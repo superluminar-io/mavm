@@ -68,6 +68,6 @@ ACCOUNT_NAME=<the account name> ACCOUNT_EMAIL=<the account email> python index.p
 
 ## Caveats and known issues
 
-- AWS account deletion fails if an AWS Organization with sub-accounts has been created. We are eagerly waiting for an AWS Organizations Account suspension API, which would solve this problem.
+- AWS account deletion fails if an AWS Organization with sub-accounts has been created. The AWS Organizations `CloseAccount` API does not solve this problem, since it has a hard limit on how many accounts can be closed at once.
 - The API is not secured with authentication currently
 - Credit card 3D-Secure authentication implementation is currently mandatory and specific to german Amazon credit card. It can be adapted to other credit card issuers, though.
