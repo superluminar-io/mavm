@@ -50,10 +50,20 @@ TODO
 
 ## Developing // Debugging
 
-### Start account creation locally
+### Account creation locally
 
 ```
+cd code/create-account
+npm i
 export RANDOM_VALUE=$RANDOM; export ACCOUNT_EMAIL=root+$RANDOM_VALUE@<your_test_domain>; export ACCOUNT_NAME=ovm-$RANDOM_VALUE; echo $ACCOUNT_EMAIL;  PRINCIPAL=<principal account id> INVOICE_EMAIL=<some_email_adress> INVOICE_CURRENCY=EUR CONNECT_INSTANCE_ID=<amazon connect instance id> QUEUE_URL_3D_SECURE=... BUCKET_FOR_TRANSCRIBE=... QUEUE_URL_MAIL_VERIFICATION=... AWS_SDK_LOAD_CONFIG=1 node index.js
+```
+
+### Account closing locally
+
+```
+cd code/close-account
+pip install -r requirements.txt
+ACCOUNT_NAME=<the account name> ACCOUNT_EMAIL=<the account email> python index.py
 ```
 
 ## Caveats and known issues
