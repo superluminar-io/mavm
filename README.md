@@ -2,7 +2,7 @@
 
 Create new AWS management accounts on the fly and clean up and close accounts afterwards again. Fully automated.
 
-Special thanks for inspiration and parts of the code go to [Ian McKay](https://onecloudplease.com/blog/) and his [AWS Account Controller](https://github.com/iann0036/aws-account-controller).
+Special thanks for inspiration and parts of the code go to [Ian McKay](https://onecloudplease.com/blog/) and his [AWS Account Controller](https://github.com/iann0036/aws-account-controller), and the [awsapilib](https://awsapilib.readthedocs.io/en/latest/).
 
 ## How it works
 
