@@ -559,22 +559,22 @@ async function signupCreditCard(page, secretdata, queueUrl3dSecure) {
     await input5.type(secretdata.ccnumber, {delay: 100});
     await page.waitForTimeout(1000);
 
-    await page.click('#awsui-select-2 > div > awsui-icon > span'); // click month selection
-    await page.waitForTimeout(1000);
-
-    const ccExpireDate = new Date(secretdata.ccyear, secretdata.ccmonth - 1, 1);
-    const ccExpireMonthName = ccExpireDate.toLocaleString('default', { month: 'long' });
-
-    await (await page.$x(
-        '//*[@id = "awsui-select-2-dropdown-options"]//span[text() = "' + ccExpireMonthName + '"]'
-    ))[0].click();
-    await page.waitForTimeout(1000);
-
     await page.click('#awsui-select-3 > div > awsui-icon > span'); // click month selection
     await page.waitForTimeout(1000);
 
+    const ccExpireDate = new Date(secretdata.ccyear, secretdata.ccmonth - 1, 1);
+    const ccExpireMonthName = ccExpireDate.toLocaleString('default', {month: 'long'});
+
     await (await page.$x(
-        '//*[@id = "awsui-select-3-dropdown-options"]//span[text() = "' + secretdata.ccyear + '"]'
+        '//*[@id = "awsui-select-3-dropdown-options"]//span[text() = "' + ccExpireMonthName + '"]'
+    ))[0].click();
+    await page.waitForTimeout(1000);
+
+    await page.click('#awsui-select-4 > div > awsui-icon > span'); // click year selection
+    await page.waitForTimeout(1000);
+
+    await (await page.$x(
+        '//*[@id = "awsui-select-4-dropdown-options"]//span[text() = "' + secretdata.ccyear + '"]'
     ))[0].click();
     await page.waitForTimeout(1000);
 
