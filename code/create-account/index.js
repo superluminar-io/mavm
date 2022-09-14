@@ -520,14 +520,17 @@ async function signupPageTwo(page, secretdata) {
     await page.type('input[name="address.phoneNumber"]:first-child', randomPhoneNumber);
     await page.waitForTimeout(1000);
 
-    await page.click('#awsui-select-1 > div > awsui-icon > span'); // click country selection
+    await page.click('#awsui-select-1 > div > awsui-icon > span'); // click area code selection
     await page.waitForTimeout(1000);
+    await page.type('#awsui-input-6', secretdata.country);
+    await page.waitForTimeout(1000);
+    await page.click("#awsui-select-1-dropdown-option-0 > div.awsui-select-option.awsui-select-option-selectable > div > div > span > span");
 
-    const option = (await page.$x(
-        '//*[@id = "awsui-select-1-dropdown-options"]//span[text() = "' + secretdata.country + '"]'
-    ))[0];
-    await option.click();
+    await page.click('#awsui-select-2 > div > awsui-icon > span'); // click country selection
     await page.waitForTimeout(1000);
+    await page.type('#awsui-input-8', secretdata.country);
+    await page.waitForTimeout(1000);
+    await page.click("#awsui-select-2-dropdown-option-0 > div.awsui-select-option.awsui-select-option-selectable > div > div > span > span");
 
     await page.type('input[name="address.addressLine1"]:first-child', secretdata.streetaddress);
     await page.waitForTimeout(1000);
@@ -556,22 +559,22 @@ async function signupCreditCard(page, secretdata, queueUrl3dSecure) {
     await input5.type(secretdata.ccnumber, {delay: 100});
     await page.waitForTimeout(1000);
 
-    await page.click('#awsui-select-2 > div > awsui-icon > span'); // click month selection
-    await page.waitForTimeout(1000);
-
-    const ccExpireDate = new Date(secretdata.ccyear, secretdata.ccmonth - 1, 1);
-    const ccExpireMonthName = ccExpireDate.toLocaleString('default', { month: 'long' });
-
-    await (await page.$x(
-        '//*[@id = "awsui-select-2-dropdown-options"]//span[text() = "' + ccExpireMonthName + '"]'
-    ))[0].click();
-    await page.waitForTimeout(1000);
-
     await page.click('#awsui-select-3 > div > awsui-icon > span'); // click month selection
     await page.waitForTimeout(1000);
 
+    const ccExpireDate = new Date(secretdata.ccyear, secretdata.ccmonth - 1, 1);
+    const ccExpireMonthName = ccExpireDate.toLocaleString('default', {month: 'long'});
+
     await (await page.$x(
-        '//*[@id = "awsui-select-3-dropdown-options"]//span[text() = "' + secretdata.ccyear + '"]'
+        '//*[@id = "awsui-select-3-dropdown-options"]//span[text() = "' + ccExpireMonthName + '"]'
+    ))[0].click();
+    await page.waitForTimeout(1000);
+
+    await page.click('#awsui-select-4 > div > awsui-icon > span'); // click year selection
+    await page.waitForTimeout(1000);
+
+    await (await page.$x(
+        '//*[@id = "awsui-select-4-dropdown-options"]//span[text() = "' + secretdata.ccyear + '"]'
     ))[0].click();
     await page.waitForTimeout(1000);
 
