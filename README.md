@@ -50,6 +50,13 @@ TODO
 
 ## Developing // Debugging
 
+### Tooling
+
+```bash
+# Format TypeScript files
+$ > yarn format
+```
+
 ### Account creation locally
 
 ```
