@@ -9,3 +9,6 @@ phases:
   build:
     commands:
       - node index.js
+artifacts:
+  files:
+    - "*.jpg"
