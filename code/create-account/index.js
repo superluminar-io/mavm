@@ -4,6 +4,7 @@ const AWS = require('aws-sdk');
 const fs = require('fs');
 const util = require('util');
 const puppeteer = require('puppeteer');
+const passwordGenerator = require('generate-password');
 
 const CONNECT_SSM_PARAMETER = '/superwerker/tests/connect' // TODO: rename
 const PRINCIPAL = process.env['PRINCIPAL'];
@@ -46,6 +47,9 @@ const signup = async function () {
     }).promise();
     let secretdata = JSON.parse(secretsmanagerresponse.SecretString);
 
+    // generate password according to the IAM rules
+    const password = passwordGenerator.generate({length: 16, uppercase: true, lowercase: true, numbers: true, symbols: '!@#$%^&*()_+-=[]{}|'})
+
     const ssm = new AWS.SSM({region: 'us-east-1'});
 
     let connectssmparameter = await ssm.getParameter({
@@ -61,7 +65,7 @@ const signup = async function () {
     const userAgent = await page.evaluate(() => navigator.userAgent);
     await page.setUserAgent(userAgent.replace('Headless', ''));
 
-    await signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME);
+    await signupPage1(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME);
 
     await signupPageTwo(page, secretdata);
 
@@ -69,7 +73,7 @@ const signup = async function () {
 
     await signupVerification(page, variables, ACCOUNT_NAME, ssm);
 
-    await loginToAccount(page, ACCOUNT_EMAIL, secretdata);
+    await loginToAccount(page, ACCOUNT_EMAIL, password, secretdata.twocaptcha_apikey);
 
     await createCrossAccountRole(page, PRINCIPAL);
 
@@ -79,7 +83,7 @@ const signup = async function () {
 
     await checkIfAccountIsReady(accountId);
 
-    await saveAccountIdAndFinish(ACCOUNT_NAME, ACCOUNT_EMAIL, accountId);
+    await saveAccountIdAndFinish(ACCOUNT_NAME, ACCOUNT_EMAIL, accountId, password);
 
     await browser.close();
 };
@@ -182,7 +186,7 @@ async function solveAudioCaptcha(audioCaptchaUrl, ACCOUNT_NAME) {
     return solvedAudioCaptcha;
 }
 
-async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
+async function loginToAccount(page, ACCOUNT_EMAIL, password, twocaptcha_apikey) {
     // log in to get account id
     await page.goto('https://console.aws.amazon.com/console/home', {
         timeout: 0,
@@ -220,7 +224,7 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
                 return obj.getAttribute('src');
             }, recaptchaimg);
 
-            let captcharesult = await solveCaptcha2captcha(page, recaptchaurl, secretdata.twocaptcha_apikey);
+            let captcharesult = await solveCaptcha2captcha(page, recaptchaurl, twocaptcha_apikey);
 
             let input2 = await page.$('#captchaGuess');
 
@@ -248,7 +252,7 @@ async function loginToAccount(page, ACCOUNT_EMAIL, secretdata) {
 
     let input4 = await page.$('#password');
     await input4.press('Backspace');
-    await input4.type(secretdata.password, {delay: 100});
+    await input4.type(password, {delay: 100});
 
     await page.click('#signin_button');
     await page.waitForTimeout(8000);
@@ -354,7 +358,7 @@ async function getAccountId(page) {
     return account['accountId'];
 }
 
-async function saveAccountIdAndFinish(ACCOUNT_NAME, ACCOUNT_EMAIL, accountId) {
+async function saveAccountIdAndFinish(ACCOUNT_NAME, ACCOUNT_EMAIL, accountId, password) {
 
     const ddb = new AWS.DynamoDB();
     await ddb.updateItem({
@@ -364,7 +368,7 @@ async function saveAccountIdAndFinish(ACCOUNT_NAME, ACCOUNT_EMAIL, accountId) {
             }
         },
         TableName: 'account',
-        UpdateExpression: "SET account_id = :account_id, account_email = :account_email, registration_date = :registration_date, account_status = :account_status",
+        UpdateExpression: "SET account_id = :account_id, account_email = :account_email, registration_date = :registration_date, account_status = :account_status, password = :password",
         ExpressionAttributeValues: {
             ":account_id": {
                 S: accountId
@@ -378,12 +382,15 @@ async function saveAccountIdAndFinish(ACCOUNT_NAME, ACCOUNT_EMAIL, accountId) {
             ":account_status": {
                 S: 'CREATED'
             },
+            ":password": {
+                S: password
+            },
 
         },
     }).promise();
 }
 
-async function signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME) {
+async function signupPage1(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
     await page.goto('https://portal.aws.amazon.com/billing/signup#/start')
     await page.waitForSelector('#awsui-input-0', {timeout: 15000});
 
@@ -490,9 +497,9 @@ async function signupPage1(page, ACCOUNT_EMAIL, secretdata, ACCOUNT_NAME) {
     await page.click('#EmailValidationVerifyOTP button:first-child');
 
     await page.waitForSelector('input[name="password"]:first-child');
-    await page.type('input[name="password"]:first-child', secretdata.password);
+    await page.type('input[name="password"]:first-child', password);
     await page.waitForTimeout(1000);
-    await page.type('input[name="rePassword"]:first-child', secretdata.password);
+    await page.type('input[name="rePassword"]:first-child', password);
     await page.waitForTimeout(1000);
 
     await page.click('#CredentialCollection button:first-child');
