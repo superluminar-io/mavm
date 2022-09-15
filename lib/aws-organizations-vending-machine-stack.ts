@@ -29,6 +29,8 @@ import * as httpapiint from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
 
 import * as path from "path";
 import {AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId} from "aws-cdk-lib/custom-resources";
+import { Bucket } from 'aws-cdk-lib/aws-s3';
+import { Artifacts } from 'aws-cdk-lib/aws-codebuild';
 
 export class AwsOrganizationsVendingMachineStack extends Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -116,7 +118,8 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
             exclude: [
                 'node_modules',
                 '.git',
-                'cdk.out'
+                'cdk.out',
+                '*.jpg'
             ],
         });
 
@@ -132,6 +135,8 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
         const managementAccountRootMailEmailVerificationQueue = new sqs.Queue(this, 'ManagementAccountRootMailEmailVerificationQueue', {
             retentionPeriod: cdk.Duration.minutes(1),
         });
+        
+        const artifactBucket = new Bucket(this, `create-accounts-artifacts`, {});
 
         const createAccountCodeProject = new codebuild.Project(this, 'CreateAccountCodeProject', {
             source: codebuild.Source.s3({
@@ -146,7 +151,12 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
                 QUEUE_URL_MAIL_VERIFICATION: {value: managementAccountRootMailEmailVerificationQueue.queueUrl},
                 CONNECT_INSTANCE_ID: {value: connectInstanceId.valueAsString},
                 BUCKET_FOR_TRANSCRIBE: {value: bucketForTranscribe.bucketName},
-            }
+            },
+            artifacts: Artifacts.s3({
+                bucket: artifactBucket,
+                packageZip: false,
+                includeBuildId: true,
+            }),
         });
         createAccountCodeProject.role?.addToPrincipalPolicy(new iam.PolicyStatement(
             {

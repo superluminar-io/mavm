@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "aws-sdk": "^2.892.0",
+    "generate-password": "^1.7.0",
     "puppeteer": "^8.0.0"
   }
 }
