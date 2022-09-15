@@ -8,7 +8,9 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "format": "yarn prettier-format",
+    "prettier-format": "prettier --config .prettierrc '{bin,code,src}/**/*.{ts,tsx}' --write"
   },
   "devDependencies": {
     "@aws-cdk/assert": "^2.3.0",
@@ -17,7 +19,10 @@
     "jest": "^27.4.5",
     "ts-jest": "^27.1.2",
     "ts-node": "^10.4.0",
-    "typescript": "~4.5.4"
+    "typescript": "~4.5.4",
+    "aws-sdk": "^2.892.0",
+    "generate-password": "^1.7.0",
+    "puppeteer": "^8.0.0"
   },
   "dependencies": {
     "@aws-cdk/aws-apigatewayv2-alpha": "^2.3.0-alpha.0",
