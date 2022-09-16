@@ -687,15 +687,15 @@ async function signupPageTwo(page, secretdata) {
 
   await page.waitForTimeout(1000);
 
-  var foundButton = false;
-  var foundCaptcha = false;
+  let foundButton = false;
+  let foundCaptcha = false;
 
   try {
     await page.waitForSelector("#awsui-radio-button-1", { timeout: 5000 });
     foundButton = true;
   } catch (e) {}
 
-  if (foundButton == false) {
+  if (foundButton === false) {
     try {
       await page.waitForSelector("#captchaGuess", {
         timeout: 5000,
@@ -752,21 +752,17 @@ async function signupPageTwo(page, secretdata) {
   );
   await page.waitForTimeout(1000);
 
-  await page.click("#awsui-select-1 > div > awsui-icon > span"); // click area code selection
-  await page.waitForTimeout(1000);
-  await page.type("#awsui-input-6", secretdata.country);
-  await page.waitForTimeout(1000);
-  await page.click(
-    "#awsui-select-1-dropdown-option-0 > div.awsui-select-option.awsui-select-option-selectable > div > div > span > span"
-  );
-
   await page.click("#awsui-select-2 > div > awsui-icon > span"); // click country selection
+  await page.waitForTimeout(1000);
+  await page.waitForSelector("#awsui-input-8", {visible:true, timeout: 5000});
+  await page.focus("#awsui-input-8");
   await page.waitForTimeout(1000);
   await page.type("#awsui-input-8", secretdata.country);
   await page.waitForTimeout(1000);
   await page.click(
-    "#awsui-select-2-dropdown-option-0 > div.awsui-select-option.awsui-select-option-selectable > div > div > span > span"
+    "#awsui-select-2-dropdown-option-0 > div > div > div > span > span"
   );
+  await page.waitForTimeout(1000);
 
   await page.type(
     'input[name="address.addressLine1"]:first-child',
@@ -927,7 +923,7 @@ async function createCrossAccountRole(page, PRINCIPAL) {
 
   const nextButtonSelector =
     "#role-creation-wizard > div > div.awsui-wizard__column-form > div.wizard-step.wizard-step__active > awsui-form > div > div.awsui-form-actions > span > div > awsui-button.awsui-wizard__primary-button > button";
-  await page.waitForSelector(nextButtonSelector, { timeout: 5000 });
+  await page.waitForSelector(nextButtonSelector, { timeout: 15000 });
   await page.click(nextButtonSelector);
 
   await page.waitForSelector("#awsui-autosuggest-0", { timeout: 5000 });
