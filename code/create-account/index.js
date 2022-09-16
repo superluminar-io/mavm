@@ -550,11 +550,6 @@ async function solveCaptcheHandler(
       audioCaptchaUrl,
       account_name
     );
-
-    if (solvedAudioCaptcha.length !== 6) {
-      throw new Error(`Only partial captcha solved: ${solvedAudioCaptcha}`);
-    }
-
     let input2 = await page.$('input[name="captchaGuess"]:first-child');
 
     await input2.press("Backspace");
