@@ -550,6 +550,7 @@ async function solveCaptcheHandler(
       audioCaptchaUrl,
       account_name
     );
+
     let input2 = await page.$('input[name="captchaGuess"]:first-child');
 
     await input2.press("Backspace");
@@ -1086,9 +1087,15 @@ const httpPostJson = (url, postData) => {
   } catch (e) {
     console.log(e);
 
-    await pageFoo.screenshot({
-      path: "failed.jpg",
-    });
+    if (pageFoo) {
+      await pageFoo.screenshot({
+        path: "failed.jpg",
+      });
+
+      const content = await pageFoo.content();
+      console.log(content);
+    }
+
     console.log("got exception in outer scope", e);
     process.exit(1);
   }
