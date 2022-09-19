@@ -4,6 +4,7 @@ const AWS = require("aws-sdk");
 const fs = require("fs");
 const util = require("util");
 const puppeteer = require("puppeteer");
+const {getDocument, queries} = require('pptr-testing-library')
 const passwordGenerator = require("generate-password");
 
 const CONNECT_SSM_PARAMETER = "/superwerker/tests/connect"; // TODO: rename
@@ -750,10 +751,15 @@ async function signupPageTwo(page, secretdata) {
 
   await page.click("#awsui-select-2 > div > awsui-icon > span"); // click country selection
   await page.waitForTimeout(1000);
-  await page.waitForSelector("#awsui-input-8", {visible:true, timeout: 5000});
-  await page.focus("#awsui-input-8");
-  await page.waitForTimeout(1000);
-  await page.type("#awsui-input-8", secretdata.country);
+  // await page.waitForSelector("#awsui-input-8", {visible:true, timeout: 5000});
+  // await page.focus("#awsui-input-8");
+  // await page.waitForTimeout(1000);
+  // await page.type("#awsui-input-8", secretdata.country);
+
+  const $document = await getDocument(page);
+  const [$countryInput] = (await queries.getAllByLabelText($document,'Country or Region')).slice(-1);
+  await $countryInput.type(secretdata.country)
+
   await page.waitForTimeout(1000);
   await page.click(
     "#awsui-select-2-dropdown-option-0 > div > div > div > span > span"
@@ -854,9 +860,6 @@ async function signupCreditCard(page, secretdata, queueUrl3dSecure) {
         visible: true,
       }
     );
-
-    // give SMS some time to arrive
-    // await page.waitForTimeout(20000);
 
     // retrieve SMS result from SQS queue
     const sqs = new AWS.SQS();
