@@ -863,13 +863,22 @@ async function signupCreditCard(page, secretdata, queueUrl3dSecure) {
 
     // retrieve SMS result from SQS queue
     const sqs = new AWS.SQS();
-    const sqsMessage = await sqs
-      .receiveMessage({
-        QueueUrl: queueUrl3dSecure,
-        MaxNumberOfMessages: 1,
-        WaitTimeSeconds: 20,
-      })
-      .promise();
+    let sqsMessage;
+    let sqsMessageAttempts = 0;
+    while (sqsMessageAttempts < 10) {
+      sqsMessageAttempts += 1;
+      console.log(`Trying to get SQS message with 3d secure code for credit card, attempt #${sqsMessageAttempts}` );
+      sqsMessage = await sqs
+          .receiveMessage({
+            QueueUrl: queueUrl3dSecure,
+            MaxNumberOfMessages: 1,
+            WaitTimeSeconds: 20,
+          })
+          .promise();
+      if (typeof sqsMessage.Messages != "undefined") {
+        break;
+      }
+    }
 
     if (typeof sqsMessage.Messages === "undefined") {
       throw "Could not read 3d secure tan from SQS queue.";
