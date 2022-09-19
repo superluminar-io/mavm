@@ -64,6 +64,7 @@ const signup = async function () {
     lowercase: true,
     numbers: true,
     symbols: "!@#$%^&*()_+-=[]{}|",
+    strict: true,
   });
 
   const ssm = new AWS.SSM({ region: "us-east-1" });
