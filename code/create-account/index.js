@@ -106,7 +106,7 @@ const signup = async function () {
   const userAgent = await page.evaluate(() => navigator.userAgent);
   await page.setUserAgent(userAgent.replace("Headless", ""));
 
-  await signupPage1(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME);
+  await signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME);
 
   await signupPageTwo(page, secretdata);
 
@@ -571,7 +571,7 @@ async function solveCaptcheHandler(
   }
 }
 
-async function signupPage1(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
+async function signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
   pageFoo = page;
 
   await page.goto("https://portal.aws.amazon.com/billing/signup#/start");
