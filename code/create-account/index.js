@@ -4,6 +4,7 @@ const AWS = require("aws-sdk");
 const fs = require("fs");
 const util = require("util");
 const puppeteer = require("puppeteer");
+const {getDocument, queries} = require('pptr-testing-library')
 const passwordGenerator = require("generate-password");
 
 const CONNECT_SSM_PARAMETER = "/superwerker/tests/connect"; // TODO: rename
@@ -63,6 +64,7 @@ const signup = async function () {
     lowercase: true,
     numbers: true,
     symbols: "!@#$%^&*()_+-=[]{}|",
+    strict: true,
   });
 
   const ssm = new AWS.SSM({ region: "us-east-1" });
@@ -106,7 +108,7 @@ const signup = async function () {
   const userAgent = await page.evaluate(() => navigator.userAgent);
   await page.setUserAgent(userAgent.replace("Headless", ""));
 
-  await signupPage1(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME);
+  await signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME);
 
   await signupPageTwo(page, secretdata);
 
@@ -551,10 +553,6 @@ async function solveCaptcheHandler(
       account_name
     );
 
-    if (solvedAudioCaptcha.length !== 6) {
-      throw new Error(`Only partial captcha solved: ${solvedAudioCaptcha}`);
-    }
-
     let input2 = await page.$('input[name="captchaGuess"]:first-child');
 
     await input2.press("Backspace");
@@ -575,7 +573,7 @@ async function solveCaptcheHandler(
   }
 }
 
-async function signupPage1(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
+async function signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
   pageFoo = page;
 
   await page.goto("https://portal.aws.amazon.com/billing/signup#/start");
@@ -687,15 +685,15 @@ async function signupPageTwo(page, secretdata) {
 
   await page.waitForTimeout(1000);
 
-  var foundButton = false;
-  var foundCaptcha = false;
+  let foundButton = false;
+  let foundCaptcha = false;
 
   try {
     await page.waitForSelector("#awsui-radio-button-1", { timeout: 5000 });
     foundButton = true;
   } catch (e) {}
 
-  if (foundButton == false) {
+  if (foundButton === false) {
     try {
       await page.waitForSelector("#captchaGuess", {
         timeout: 5000,
@@ -752,21 +750,22 @@ async function signupPageTwo(page, secretdata) {
   );
   await page.waitForTimeout(1000);
 
-  await page.click("#awsui-select-1 > div > awsui-icon > span"); // click area code selection
-  await page.waitForTimeout(1000);
-  await page.type("#awsui-input-6", secretdata.country);
-  await page.waitForTimeout(1000);
-  await page.click(
-    "#awsui-select-1-dropdown-option-0 > div.awsui-select-option.awsui-select-option-selectable > div > div > span > span"
-  );
-
   await page.click("#awsui-select-2 > div > awsui-icon > span"); // click country selection
   await page.waitForTimeout(1000);
-  await page.type("#awsui-input-8", secretdata.country);
+  // await page.waitForSelector("#awsui-input-8", {visible:true, timeout: 5000});
+  // await page.focus("#awsui-input-8");
+  // await page.waitForTimeout(1000);
+  // await page.type("#awsui-input-8", secretdata.country);
+
+  const $document = await getDocument(page);
+  const [$countryInput] = (await queries.getAllByLabelText($document,'Country or Region')).slice(-1);
+  await $countryInput.type(secretdata.country)
+
   await page.waitForTimeout(1000);
   await page.click(
-    "#awsui-select-2-dropdown-option-0 > div.awsui-select-option.awsui-select-option-selectable > div > div > span > span"
+    "#awsui-select-2-dropdown-option-0 > div > div > div > span > span"
   );
+  await page.waitForTimeout(1000);
 
   await page.type(
     'input[name="address.addressLine1"]:first-child',
@@ -863,18 +862,24 @@ async function signupCreditCard(page, secretdata, queueUrl3dSecure) {
       }
     );
 
-    // give SMS some time to arrive
-    // await page.waitForTimeout(20000);
-
     // retrieve SMS result from SQS queue
     const sqs = new AWS.SQS();
-    const sqsMessage = await sqs
-      .receiveMessage({
-        QueueUrl: queueUrl3dSecure,
-        MaxNumberOfMessages: 1,
-        WaitTimeSeconds: 20,
-      })
-      .promise();
+    let sqsMessage;
+    let sqsMessageAttempts = 0;
+    while (sqsMessageAttempts < 10) {
+      sqsMessageAttempts += 1;
+      console.log(`Trying to get SQS message with 3d secure code for credit card, attempt #${sqsMessageAttempts}` );
+      sqsMessage = await sqs
+          .receiveMessage({
+            QueueUrl: queueUrl3dSecure,
+            MaxNumberOfMessages: 1,
+            WaitTimeSeconds: 20,
+          })
+          .promise();
+      if (typeof sqsMessage.Messages != "undefined") {
+        break;
+      }
+    }
 
     if (typeof sqsMessage.Messages === "undefined") {
       throw "Could not read 3d secure tan from SQS queue.";
@@ -927,7 +932,7 @@ async function createCrossAccountRole(page, PRINCIPAL) {
 
   const nextButtonSelector =
     "#role-creation-wizard > div > div.awsui-wizard__column-form > div.wizard-step.wizard-step__active > awsui-form > div > div.awsui-form-actions > span > div > awsui-button.awsui-wizard__primary-button > button";
-  await page.waitForSelector(nextButtonSelector, { timeout: 5000 });
+  await page.waitForSelector(nextButtonSelector, { timeout: 15000 });
   await page.click(nextButtonSelector);
 
   await page.waitForSelector("#awsui-autosuggest-0", { timeout: 5000 });
@@ -1095,9 +1100,15 @@ const httpPostJson = (url, postData) => {
   } catch (e) {
     console.log(e);
 
-    await pageFoo.screenshot({
-      path: "failed.jpg",
-    });
+    if (pageFoo) {
+      await pageFoo.screenshot({
+        path: "failed.jpg",
+      });
+
+      const content = await pageFoo.content();
+      console.log(content);
+    }
+
     console.log("got exception in outer scope", e);
     process.exit(1);
   }
