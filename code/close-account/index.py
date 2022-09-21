@@ -19,6 +19,7 @@ account_email = os.environ['ACCOUNT_EMAIL']
 ddb = boto3.client('dynamodb')
 account_info = ddb.get_item(TableName='account', Key={'account_name': {"S": account_name}})['Item']
 account_id = account_info['account_id']['S']
+password = account_info['password']['S']
 
 sm = boto3.client('secretsmanager')
 secret_values = json.loads(sm.get_secret_value(SecretId='/aws-organizations-vending-machine/ccdata')['SecretString'])
@@ -27,7 +28,7 @@ solver = Captcha2(secret_values['twocaptcha_apikey'])
 admin_role = 'arn:aws:iam::{}:role/OVMCrossAccountRole'.format(account_id)
 
 try:
-    account_manager = AccountManager(account_email, secret_values['password'], 'eu-west-1', solver=solver)
+    account_manager = AccountManager(account_email, password, 'eu-west-1', solver=solver)
 
     account_manager.iam.billing_console_access = True
     time.sleep(10)
