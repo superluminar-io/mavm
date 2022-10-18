@@ -135,7 +135,7 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
         const managementAccountRootMailEmailVerificationQueue = new sqs.Queue(this, 'ManagementAccountRootMailEmailVerificationQueue', {
             retentionPeriod: cdk.Duration.minutes(1),
         });
-        
+
         const artifactBucket = new Bucket(this, `create-accounts-artifacts`, {});
 
         const createAccountCodeProject = new codebuild.Project(this, 'CreateAccountCodeProject', {
@@ -143,6 +143,9 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
                 bucket: createAccountCodeAsset.bucket,
                 path: createAccountCodeAsset.s3ObjectKey,
             }),
+            environment: {
+                buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
+            },
             environmentVariables: {
                 PRINCIPAL: {value: process.env.CDK_DEFAULT_ACCOUNT },
                 INVOICE_CURRENCY: {value: invoiceCurrency.valueAsString},
@@ -157,6 +160,7 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
                 packageZip: false,
                 includeBuildId: true,
             }),
+
         });
         createAccountCodeProject.role?.addToPrincipalPolicy(new iam.PolicyStatement(
             {
