@@ -108,14 +108,19 @@ const signup = async function () {
   const userAgent = await page.evaluate(() => navigator.userAgent);
   await page.setUserAgent(userAgent.replace("Headless", ""));
 
+  console.log("signupPageOne");
   await signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME);
 
+  console.log("signupPageTwo");
   await signupPageTwo(page, secretdata);
 
+  console.log("signupCreditCard");
   await signupCreditCard(page, secretdata, QUEUE_URL_3D_SECURE);
 
+  console.log("signupVerification");
   await signupVerification(page, variables, ACCOUNT_NAME, ssm);
 
+  console.log("loginToAccount");
   await loginToAccount(
     page,
     ACCOUNT_EMAIL,
@@ -123,14 +128,19 @@ const signup = async function () {
     secretdata.twocaptcha_apikey
   );
 
+  console.log("createCrossAccountRole");
   await createCrossAccountRole(page, PRINCIPAL);
 
+  console.log("billingInformation");
   await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
 
+  console.log("getAccountId");
   const accountId = await getAccountId(page);
 
+  console.log("checkIfAccountIsReady");
   await checkIfAccountIsReady(accountId);
 
+  console.log("saveAccountIdAndFinish");
   await saveAccountIdAndFinish(
     ACCOUNT_NAME,
     ACCOUNT_EMAIL,
