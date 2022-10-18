@@ -18,7 +18,7 @@ const ACCOUNT_EMAIL = process.env["ACCOUNT_EMAIL"];
 const QUEUE_URL_3D_SECURE = process.env["QUEUE_URL_3D_SECURE"];
 const QUEUE_URL_MAIL_VERIFICATION = process.env["QUEUE_URL_MAIL_VERIFICATION"];
 const BUCKET_FOR_TRANSCRIBE = process.env["BUCKET_FOR_TRANSCRIBE"];
-let pageFoo = null;
+let lastPage = null;
 
 async function checkIfAccountIsReady(accountId) {
   const sts = new AWS.STS();
@@ -262,6 +262,7 @@ async function loginToAccount(
   password,
   twocaptcha_apikey
 ) {
+  lastPage = page;
   // log in to get account id
   await page.goto("https://console.aws.amazon.com/console/home", {
     timeout: 0,
@@ -340,6 +341,7 @@ async function loginToAccount(
 }
 
 async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
+  lastPage = page;
   await page.waitForTimeout(10000); // wait for redirects to finish
 
   await page.click('input[name="divaMethod"][value="Phone"]:first-child');
@@ -460,6 +462,7 @@ async function signupVerification(page, variables, ACCOUNT_NAME, ssm) {
 }
 
 async function getAccountId(page) {
+  lastPage = page;
   await page.goto("https://console.aws.amazon.com/billing/rest/v1.0/account", {
     timeout: 0,
     waitUntil: ["domcontentloaded"],
@@ -574,7 +577,7 @@ async function solveCaptcheHandler(
 }
 
 async function signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
-  pageFoo = page;
+  lastPage = page;
 
   await page.goto("https://portal.aws.amazon.com/billing/signup#/start");
   await page.waitForSelector("#awsui-input-0", { timeout: 15000 });
@@ -677,7 +680,7 @@ async function signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
 }
 
 async function signupPageTwo(page, secretdata) {
-  pageFoo = page;
+  lastPage = page;
 
   page.screenshot({
     path: "page-2-start.jpg",
@@ -793,6 +796,7 @@ async function signupPageTwo(page, secretdata) {
 }
 
 async function signupCreditCard(page, secretdata, queueUrl3dSecure) {
+  lastPage = page;
   await page.waitForSelector('input[name="cardNumber"]:first-child');
 
   let input5 = await page.$('input[name="cardNumber"]:first-child');
@@ -910,6 +914,7 @@ async function signupCreditCard(page, secretdata, queueUrl3dSecure) {
 }
 
 async function createCrossAccountRole(page, PRINCIPAL) {
+  lastPage = page
   // remove cookie banner so that it's possible to click on the submit button later, otherwise the UI thinks the button cannot be clicked
   await page.$eval(
     "#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary",
@@ -965,6 +970,7 @@ async function createCrossAccountRole(page, PRINCIPAL) {
 }
 
 async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
+  lastPage = page;
   await page.setViewport({ width: 1366, height: 2000 });
   await page.goto("https://console.aws.amazon.com/billing/home?#/account");
   await page.waitForTimeout(3000);
@@ -1100,12 +1106,12 @@ const httpPostJson = (url, postData) => {
   } catch (e) {
     console.log(e);
 
-    if (pageFoo) {
-      await pageFoo.screenshot({
+    if (lastPage) {
+      await lastPage.screenshot({
         path: "failed.jpg",
       });
 
-      const content = await pageFoo.content();
+      const content = await lastPage.content();
       console.log(content);
     }
 
