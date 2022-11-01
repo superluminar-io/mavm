@@ -1,36 +1,35 @@
+import * as cdk from 'aws-cdk-lib';
 import {
-    aws_events_targets,
+    aws_apigateway as restapi,
+    aws_codebuild as codebuild,
+    aws_dynamodb as dynamodb,
+    aws_events as events,
+    aws_events_targets as events_targets,
+    aws_iam as iam,
+    aws_lambda as lambda,
+    aws_lambda_event_sources as lambdaeventsources,
+    aws_lambda_nodejs as lambda_nodejs,
     aws_logs,
     aws_route53,
+    aws_s3 as s3,
+    aws_s3_assets as s3_assets,
+    aws_s3_deployment as s3deploy,
     aws_s3_notifications,
     aws_ses,
     aws_ses_actions,
+    aws_sqs as sqs,
+    aws_stepfunctions as sfn,
+    aws_stepfunctions_tasks as tasks,
     Stack
 } from 'aws-cdk-lib';
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-
-import { aws_iam as iam } from 'aws-cdk-lib';
-import { aws_s3 as s3 } from 'aws-cdk-lib';
-import { aws_sqs as sqs } from 'aws-cdk-lib';
-import { aws_events as events } from 'aws-cdk-lib';
-import { aws_events_targets as events_targets } from 'aws-cdk-lib';
-import { aws_lambda as lambda } from 'aws-cdk-lib';
-import { aws_lambda_nodejs as lambda_nodejs } from 'aws-cdk-lib';
-import { aws_dynamodb as dynamodb } from 'aws-cdk-lib';
-import { aws_apigateway as restapi } from 'aws-cdk-lib';
+import {Construct} from 'constructs';
 import * as httpapi from '@aws-cdk/aws-apigatewayv2-alpha';
-import { aws_lambda_event_sources as lambdaeventsources } from 'aws-cdk-lib';
-import { aws_stepfunctions as sfn } from 'aws-cdk-lib';
-import { aws_stepfunctions_tasks as tasks } from 'aws-cdk-lib';
-import { aws_codebuild as codebuild } from 'aws-cdk-lib';
-import { aws_s3_assets as s3_assets } from 'aws-cdk-lib';
 import * as httpapiint from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
 
 import * as path from "path";
 import {AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId} from "aws-cdk-lib/custom-resources";
-import { Bucket } from 'aws-cdk-lib/aws-s3';
-import { Artifacts } from 'aws-cdk-lib/aws-codebuild';
+import {Bucket} from 'aws-cdk-lib/aws-s3';
+import {Artifacts} from 'aws-cdk-lib/aws-codebuild';
 
 export class AwsOrganizationsVendingMachineStack extends Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -110,7 +109,7 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
                     ],
                 },
             }),
-            { methodResponses: [{ statusCode: "200" }] }
+            {methodResponses: [{statusCode: "200"}]}
         );
 
         const createAccountCodeAsset = new s3_assets.Asset(this, 'CreateAccountCodeAsset', {
@@ -132,6 +131,21 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
             removalPolicy: cdk.RemovalPolicy.DESTROY,
         });
 
+        const bucketForCrossAccountRoleCfnTemplate = new s3.Bucket(this, 'BucketForCrossAccountRoleCfnTemplate', {
+            publicReadAccess: true,
+        });
+
+        const deployment = new s3deploy.BucketDeployment(this, 'DeployCrossAccountRoleCfnTemplate', {
+            sources: [
+                s3deploy.Source.asset(
+                    path.join(__dirname, '.'), {
+                        exclude: ['**', '!crossaccountrole.yaml']
+                    }
+                )
+            ],
+            destinationBucket: bucketForCrossAccountRoleCfnTemplate,
+        });
+
         const managementAccountRootMailEmailVerificationQueue = new sqs.Queue(this, 'ManagementAccountRootMailEmailVerificationQueue', {
             retentionPeriod: cdk.Duration.minutes(1),
         });
@@ -147,13 +161,14 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
                 buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
             },
             environmentVariables: {
-                PRINCIPAL: {value: process.env.CDK_DEFAULT_ACCOUNT },
+                PRINCIPAL: {value: process.env.CDK_DEFAULT_ACCOUNT},
                 INVOICE_CURRENCY: {value: invoiceCurrency.valueAsString},
                 INVOICE_EMAIL: {value: invoiceEmail.valueAsString},
                 QUEUE_URL_3D_SECURE: {value: creditCard3SecureQueue.queueUrl},
                 QUEUE_URL_MAIL_VERIFICATION: {value: managementAccountRootMailEmailVerificationQueue.queueUrl},
                 CONNECT_INSTANCE_ID: {value: connectInstanceId.valueAsString},
                 BUCKET_FOR_TRANSCRIBE: {value: bucketForTranscribe.bucketName},
+                BUCKET_FOR_CROSS_ACCOUNT_ROLE_CFN_TEMPLATE: {value: bucketForCrossAccountRoleCfnTemplate.bucketName},
             },
             artifacts: Artifacts.s3({
                 bucket: artifactBucket,
@@ -264,7 +279,7 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
 
         api.addRoutes({
             path: '/vend',
-            methods: [ httpapi.HttpMethod.GET ],
+            methods: [httpapi.HttpMethod.GET],
             integration: new httpapiint.HttpLambdaIntegration('GetAvailableAccountHandler', getAvailableAccountFunction),
         });
 
@@ -362,7 +377,10 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
         s3bucketForManagementAccountRootMail.addEventNotification(s3.EventType.OBJECT_CREATED_PUT, new aws_s3_notifications.SqsDestination(managementAccountRootMailEmailVerificationQueue));
 
         // RootMail setup
-        const dnsZoneForManagementAccountRootEmail =  aws_route53.HostedZone.fromHostedZoneAttributes(this, 'ManagementAccountRootEmailDnsZone', {hostedZoneId: managementAccountRootEmailDnsHostedZoneId.valueAsString, zoneName: managementAccountRootEmailDnsHostedZoneName.valueAsString});
+        const dnsZoneForManagementAccountRootEmail = aws_route53.HostedZone.fromHostedZoneAttributes(this, 'ManagementAccountRootEmailDnsZone', {
+            hostedZoneId: managementAccountRootEmailDnsHostedZoneId.valueAsString,
+            zoneName: managementAccountRootEmailDnsHostedZoneName.valueAsString
+        });
 
         new aws_route53.MxRecord(this, "ManagementAccountRootEmailDnsZoneMxRecord", {
             zone: dnsZoneForManagementAccountRootEmail,

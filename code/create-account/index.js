@@ -18,6 +18,7 @@ const ACCOUNT_EMAIL = process.env["ACCOUNT_EMAIL"];
 const QUEUE_URL_3D_SECURE = process.env["QUEUE_URL_3D_SECURE"];
 const QUEUE_URL_MAIL_VERIFICATION = process.env["QUEUE_URL_MAIL_VERIFICATION"];
 const BUCKET_FOR_TRANSCRIBE = process.env["BUCKET_FOR_TRANSCRIBE"];
+const BUCKET_FOR_CROSS_ACCOUNT_ROLE_CFN_TEMPLATE = process.env["BUCKET_FOR_CROSS_ACCOUNT_ROLE_CFN_TEMPLATE"];
 let lastPage = null;
 
 async function checkIfAccountIsReady(accountId) {
@@ -927,8 +928,8 @@ async function createCrossAccountRole(page, PRINCIPAL) {
   lastPage = page
   // remove cookie banner so that it's possible to click on the submit button later, otherwise the UI thinks the button cannot be clicked
   await page.$eval(
-    "#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary",
-    (e) => e.click()
+      "#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary",
+      (e) => e.click()
   );
   await page.waitForTimeout(5000);
 
@@ -941,52 +942,30 @@ async function createCrossAccountRole(page, PRINCIPAL) {
   const crossAccountRole = "OVMCrossAccountRole";
 
   let init = util.format(
-    "https://console.aws.amazon.com/iamv2/home#/roles/create?awsAccount=%s&step=review&trustedEntityType=AWS_ACCOUNT",
-    PRINCIPAL
+      'https://eu-central-1.console.aws.amazon.com/cloudformation/home?region=eu-central-1#/stacks/create/review?templateUrl=https://%s.s3-eu-west-1.amazonaws.com/crossaccountrole.yaml&stackName=ovm-role&param_Principal=%s&param_RoleName=%s',
+      BUCKET_FOR_CROSS_ACCOUNT_ROLE_CFN_TEMPLATE,
+      PRINCIPAL,
+      crossAccountRole
   );
 
-  // log in to get account id
+  // open Cloudformation console
   await page.goto(init, {
     timeout: 0,
     waitUntil: ["domcontentloaded"],
   });
 
-  const nextButtonSelector =
-    "#role-creation-wizard > div > div.awsui-wizard__column-form > div.wizard-step.wizard-step__active > awsui-form > div > div.awsui-form-actions > span > div > awsui-button.awsui-wizard__primary-button > button";
-  await page.waitForSelector(nextButtonSelector, { timeout: 15000 });
-  await page.click(nextButtonSelector);
-
-  await page.waitForSelector("#awsui-autosuggest-0", { timeout: 5000 });
-  await page.click("#awsui-autosuggest-0");
-  await page.waitForTimeout(2000);
-  await page.type("#awsui-autosuggest-0", "AdministratorAccess");
-  await page.waitForTimeout(1000);
-  await page.keyboard.press("Enter");
-  await page.waitForTimeout(2000);
-
-  await page.screenshot({path: 'crossAccount0.jpg'});
-
-  await page.waitForSelector("#awsui-checkbox-1", { timeout: 5000 });
-  const checkbox = await page.$(
-    "#RoleCreate-AttachPoliciesTable > awsui-table > div > div.awsui-table-container > table > tbody > tr:nth-child(1) > td.awsui-table-selection-area > awsui-checkbox input"
-  );
-  await checkbox.evaluate((b) => b.click());
-
-  await page.waitForTimeout(2000);
-
+  await page.waitForTimeout(5000);
   await page.screenshot({path: 'crossAccount1.jpg'});
 
-  await page.waitForSelector(nextButtonSelector, { timeout: 5000 });
-  await page.click(nextButtonSelector);
+  // accept IAM changes, look for the last checkbox on the page
+  await page.$$eval('input[type="checkbox"]', elements => elements[elements.length - 1].click());
 
-  await page.waitForSelector("#awsui-input-3", { timeout: 5000 });
-  await page.type("#awsui-input-3", crossAccountRole);
+  // deploy stack
+  await page.click('button.e2e-test-wizard-create-stack-button');
 
-  await page.waitForTimeout(2000);
-  await page.waitForSelector(nextButtonSelector, { timeout: 5000 });
-  await page.click(nextButtonSelector);
+  // wait, TODO: figure out a better way
+  await page.waitForTimeout(30000);
   await page.screenshot({path: 'crossAccount2.jpg'});
-  await page.waitForTimeout(10000);
 }
 
 async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
