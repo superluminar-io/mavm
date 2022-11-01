@@ -128,11 +128,11 @@ const signup = async function () {
     secretdata.twocaptcha_apikey
   );
 
-  console.log("createCrossAccountRole");
-  await createCrossAccountRole(page, PRINCIPAL);
-
   console.log("billingInformation");
   await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
+
+  console.log("createCrossAccountRole");
+  await createCrossAccountRole(page, PRINCIPAL);
 
   console.log("getAccountId");
   const accountId = await getAccountId(page);
@@ -592,7 +592,7 @@ async function signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
   await page.goto("https://portal.aws.amazon.com/billing/signup#/start");
   await page.waitForSelector("#awsui-input-0", { timeout: 15000 });
 
-  page.screenshot({
+  await page.screenshot({
     path: "page-1-start.jpg",
   });
 
@@ -684,7 +684,7 @@ async function signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
     "#CredentialCollection > fieldset > awsui-button:nth-child(7) > button"
   );
 
-  page.screenshot({
+  await page.screenshot({
     path: "page-1-end.jpg",
   });
 }
@@ -692,7 +692,7 @@ async function signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
 async function signupPageTwo(page, secretdata) {
   lastPage = page;
 
-  page.screenshot({
+  await page.screenshot({
     path: "page-2-start.jpg",
   });
 
@@ -932,6 +932,12 @@ async function createCrossAccountRole(page, PRINCIPAL) {
   );
   await page.waitForTimeout(5000);
 
+  // also remove the blue first steps wizard to make things clickable
+  const $document = await getDocument(page);
+  const $button = await queries.getByTestId($document, 'awsc-nav-services-tooltip-confirm-button');
+  await $button.click();
+  await page.waitForTimeout(2000);
+
   const crossAccountRole = "OVMCrossAccountRole";
 
   let init = util.format(
@@ -955,9 +961,10 @@ async function createCrossAccountRole(page, PRINCIPAL) {
   await page.waitForTimeout(2000);
   await page.type("#awsui-autosuggest-0", "AdministratorAccess");
   await page.waitForTimeout(1000);
-
   await page.keyboard.press("Enter");
   await page.waitForTimeout(2000);
+
+  await page.screenshot({path: 'crossAccount0.jpg'});
 
   await page.waitForSelector("#awsui-checkbox-1", { timeout: 5000 });
   const checkbox = await page.$(
@@ -966,16 +973,19 @@ async function createCrossAccountRole(page, PRINCIPAL) {
   await checkbox.evaluate((b) => b.click());
 
   await page.waitForTimeout(2000);
+
+  await page.screenshot({path: 'crossAccount1.jpg'});
+
   await page.waitForSelector(nextButtonSelector, { timeout: 5000 });
   await page.click(nextButtonSelector);
 
-  await page.waitForSelector("#awsui-input-0", { timeout: 5000 });
-  await page.type("#awsui-input-0", crossAccountRole);
+  await page.waitForSelector("#awsui-input-3", { timeout: 5000 });
+  await page.type("#awsui-input-3", crossAccountRole);
 
   await page.waitForTimeout(2000);
   await page.waitForSelector(nextButtonSelector, { timeout: 5000 });
   await page.click(nextButtonSelector);
-
+  await page.screenshot({path: 'crossAccount2.jpg'});
   await page.waitForTimeout(10000);
 }
 
@@ -1116,16 +1126,18 @@ const httpPostJson = (url, postData) => {
   } catch (e) {
     console.log(e);
 
-    if (lastPage) {
-      await lastPage.screenshot({
-        path: "failed.jpg",
-      });
+    // once we are timed out we can't do anything with puppeteer anymore...
+    if (!(e instanceof puppeteer.TimeoutError)) {
+      if (lastPage) {
+        console.log("taking screenshots...");
+        await lastPage.screenshot({
+          path: "failed.jpg",
+        });
 
-      const content = await lastPage.content();
-      console.log(content);
+        const content = await lastPage.content();
+        //console.log(content);
+      }
     }
-
-    console.log("got exception in outer scope", e);
     process.exit(1);
   }
 })();
