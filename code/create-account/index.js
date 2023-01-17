@@ -957,11 +957,11 @@ async function createCrossAccountRole(page, PRINCIPAL) {
   await page.waitForTimeout(5000);
   await page.screenshot({path: 'crossAccount1.jpg'});
 
-  // accept IAM changes, look for the last checkbox on the page
-  await page.$$eval('input[type="checkbox"]', elements => elements[elements.length - 1].click());
+  // accept IAM changes
+  await page.click('#CAPABILITY_NAMED_IAM-checkbox-control_0')
 
   // deploy stack
-  await page.click('button.e2e-test-wizard-create-stack-button');
+  await page.click('#console-app > div > div > div > div > div > main > div > div.awsui_content-wrapper_lm6vo_xtmft_233.awsui_content-wrapper_zycdx_s6r07_93 > div > div > form > div > div.awsui_footer_1i0s3_19emo_116 > div > div > div > div:nth-child(3) > button');
 
   // wait, TODO: figure out a better way
   await page.waitForTimeout(30000);
@@ -972,6 +972,8 @@ async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
   lastPage = page;
   await page.setViewport({ width: 1366, height: 2000 });
   await page.goto("https://console.aws.amazon.com/billing/home?#/account");
+
+  // select invoice currency
   await page.waitForTimeout(3000);
   await page.waitForSelector("#account__edit-currency-preference");
   await page.click("#account__edit-currency-preference");
@@ -983,39 +985,41 @@ async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
 
   await page.waitForTimeout(3000);
   await page.click(
-    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(3) > div > div > div > div.account-information-update-buttons.margin-top-10 > button.btn.btn-primary"
+    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(1) > div:nth-child(7) > div > div > div > div.account-information-update-buttons.margin-top-10 > button.btn.btn-primary"
   );
-  await page.waitForTimeout(3000);
 
+  // fill in billing contact data
+  await page.waitForTimeout(3000);
   await page.click(
-    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > a"
+    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(1) > div:nth-child(8) > a"
   );
   await page.waitForTimeout(3000);
   await page.type(
-    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(1) > input",
+    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(1) > div:nth-child(8) > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(1) > input",
     "Bill Gates"
   );
   await page.waitForTimeout(1000);
   await page.type(
-    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(2) > input",
+    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(1) > div:nth-child(8) > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(2) > input",
     "CFO"
   );
   await page.waitForTimeout(1000);
   await page.type(
-    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(3) > input",
+    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(1) > div:nth-child(8) > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(3) > input",
     INVOICE_EMAIL
   );
   await page.waitForTimeout(1000);
   await page.type(
-    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(4) > input",
+    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(1) > div:nth-child(8) > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(4) > input",
     "+1234567890"
   );
   await page.waitForTimeout(1000);
   await page.click(
-    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(4) > div > div > div > div.account-information-update-buttons.margin-top-10.ng-scope > button.btn.btn-primary"
+    "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(1) > div:nth-child(8) > div > div > div.account-information-update-buttons.margin-top-10.ng-scope > button.btn.btn-primary"
   );
   await page.waitForTimeout(3000);
 
+  // activate "Receive PDF Invoice By Email"
   await page.goto("https://console.aws.amazon.com/billing/home?#/preferences");
   await page.waitForTimeout(3000);
   await page.click(
