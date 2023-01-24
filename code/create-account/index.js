@@ -6,6 +6,7 @@ const util = require("util");
 const puppeteer = require("puppeteer");
 const {getDocument, queries} = require('pptr-testing-library')
 const passwordGenerator = require("generate-password");
+const db = require("./lib/db")
 
 const CONNECT_SSM_PARAMETER = "/superwerker/tests/connect"; // TODO: rename
 const PRINCIPAL = process.env["PRINCIPAL"];
@@ -121,6 +122,13 @@ const signup = async function () {
   console.log("signupVerification");
   await signupVerification(page, variables, ACCOUNT_NAME, ssm);
 
+  console.log("saveAccountAndSetToInProgress")
+  await db.saveAccountAndSetToInProgress(
+      ACCOUNT_NAME,
+      ACCOUNT_EMAIL,
+      password
+  );
+
   console.log("loginToAccount");
   await loginToAccount(
     page,
@@ -141,13 +149,8 @@ const signup = async function () {
   console.log("checkIfAccountIsReady");
   await checkIfAccountIsReady(accountId);
 
-  console.log("saveAccountIdAndFinish");
-  await saveAccountIdAndFinish(
-    ACCOUNT_NAME,
-    ACCOUNT_EMAIL,
-    accountId,
-    password
-  );
+  console.log("saveAccountAndSetToCreated");
+  await db.saveAccountAndSetToCreated(ACCOUNT_NAME, accountId);
 
   await browser.close();
 };
@@ -484,44 +487,6 @@ async function getAccountId(page) {
   );
   const account = JSON.parse(innerText);
   return account["accountId"];
-}
-
-async function saveAccountIdAndFinish(
-  ACCOUNT_NAME,
-  ACCOUNT_EMAIL,
-  accountId,
-  password
-) {
-  const ddb = new AWS.DynamoDB();
-  await ddb
-    .updateItem({
-      Key: {
-        account_name: {
-          S: ACCOUNT_NAME,
-        },
-      },
-      TableName: "account",
-      UpdateExpression:
-        "SET account_id = :account_id, account_email = :account_email, registration_date = :registration_date, account_status = :account_status, password = :password",
-      ExpressionAttributeValues: {
-        ":account_id": {
-          S: accountId,
-        },
-        ":account_email": {
-          S: ACCOUNT_EMAIL,
-        },
-        ":registration_date": {
-          S: new Date().toISOString(),
-        },
-        ":account_status": {
-          S: "CREATED",
-        },
-        ":password": {
-          S: password,
-        },
-      },
-    })
-    .promise();
 }
 
 async function solveCaptcheHandler(
