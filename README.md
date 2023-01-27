@@ -48,20 +48,65 @@ The response is a JSON:
 
 TODO
 
-## Developing // Debugging
+### Account creation locally (with debugging)
+- this will use the pre-installed MAVN
+- and start the flow in a chromium browser
 
-### Account creation locally
-
-```
+```sh
 cd code/create-account
 npm i
-export RANDOM_VALUE=$RANDOM; export ACCOUNT_EMAIL=root+$RANDOM_VALUE@<your_test_domain>; export ACCOUNT_NAME=ovm-$RANDOM_VALUE; echo $ACCOUNT_EMAIL;  PRINCIPAL=<principal account id> INVOICE_EMAIL=<some_email_adress> INVOICE_CURRENCY=EUR CONNECT_INSTANCE_ID=<amazon connect instance id> QUEUE_URL_3D_SECURE=... BUCKET_FOR_TRANSCRIBE=... QUEUE_URL_MAIL_VERIFICATION=... AWS_SDK_LOAD_CONFIG=1 node index.js
+# on Mac arm64 run it as follows and download chromium upfront via 'brew install --cask chromium'
+# PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm i
+
+export DOMAIN="" # the TLD you use as root mail address
+export AWS_MAVM_ACCOUNT_REGION=""; # the region where MAVM is deployed
+export AWS_MAVM_ACCOUNT_PROFILE=""; # the profile you want to use in the account where MAVM is deployed
+export AWS_CODEBUILD_PROJECT_NAME=""; # name of the codebuild 'CreateAccountCodeProject-<random>' project. see in the console
+export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true; # as we already downloaded the binary
+export PUPPETEER_EXECUTABLE_PATH=$(which chromium); # we use chromium here
+# now we set all the needed environment variables
+export QUEUE_URL_MAIL_VERIFICATION=$(aws --profile $AWS_MAVM_ACCOUNT_PROFILE codebuild batch-get-projects --names $AWS_CODEBUILD_PROJECT_NAME --query "projects[0].environment.environmentVariables[?name=='QUEUE_URL_MAIL_VERIFICATION'].value" --output text);
+export BUCKET_FOR_TRANSCRIBE=$(aws --profile $AWS_MAVM_ACCOUNT_PROFILE codebuild batch-get-projects --names $AWS_CODEBUILD_PROJECT_NAME --query "projects[0].environment.environmentVariables[?name=='BUCKET_FOR_TRANSCRIBE'].value" --output text);
+export QUEUE_URL_3D_SECURE=$(aws --profile $AWS_MAVM_ACCOUNT_PROFILE codebuild batch-get-projects --names $AWS_CODEBUILD_PROJECT_NAME --query "projects[0].environment.environmentVariables[?name=='QUEUE_URL_3D_SECURE'].value" --output text);
+export CONNECT_INSTANCE_ID=$(aws --profile $AWS_MAVM_ACCOUNT_PROFILE codebuild batch-get-projects --names $AWS_CODEBUILD_PROJECT_NAME --query "projects[0].environment.environmentVariables[?name=='CONNECT_INSTANCE_ID'].value" --output text);
+export PRINCIPAL=$(aws --profile $AWS_MAVM_ACCOUNT_PROFILE codebuild batch-get-projects --names $AWS_CODEBUILD_PROJECT_NAME --query "projects[0].environment.environmentVariables[?name=='PRINCIPAL'].value" --output text);
+export INVOICE_EMAIL=$(aws --profile $AWS_MAVM_ACCOUNT_PROFILE codebuild batch-get-projects --names $AWS_CODEBUILD_PROJECT_NAME --query "projects[0].environment.environmentVariables[?name=='INVOICE_EMAIL'].value" --output text);
+export INVOICE_CURRENCY=$(aws --profile $AWS_MAVM_ACCOUNT_PROFILE codebuild batch-get-projects --names $AWS_CODEBUILD_PROJECT_NAME --query "projects[0].environment.environmentVariables[?name=='INVOICE_CURRENCY'].value" --output text);
+
+RANDOM_VALUE=$(openssl rand -hex 4) \
+ACCOUNT_NAME=ovm-$RANDOM_VALUE \
+ACCOUNT_EMAIL=root+$RANDOM_VALUE@$DOMAIN \
+AWS_REGION=$AWS_TEST_ACCOUNT_REGION \
+AWS_SDK_LOAD_CONFIG=1 \
+node index.js
+```
+
+### Account Creation via triggering Codebuild job
+We need this as chromium behaves differently on Mac (for local testing) than on Linux (on which codebuild runs)
+- after your local changes ran successfully
+- first publish the changes via `yarn cdk deploy` (to be verified)
+
+```sh
+export DOMAIN=""; \                     # the TLD you use as root mail address
+export AWS_MAVM_ACCOUNT_REGION=""; \    # the region where MAVM is deployed
+export AWS_MAVM_ACCOUNT_PROFILE=""; \   # the profile you want to use in the account where MAVM is deployed
+export AWS_CODEBUILD_PROJECT_NAME=""; \ # name of the codebuild 'CreateAccountCodeProject-<random>' project. see in the console
+export FOO=$(openssl rand -hex 4) \
+    && aws codebuild start-build \
+        --profile $AWS_MAVM_ACCOUNT_PROFILE \
+        --project-name $AWS_CODEBUILD_PROJECT_NAME \
+        --region $AWS_MAVM_ACCOUNT_REGION \
+        --environment-variables-override \
+            "name=ACCOUNT_NAME,value=ovm-${FOO},type=PLAINTEXT" \
+            "name=ACCOUNT_EMAIL,value=root+ovm-${FOO}@$DOMAIN,type=PLAINTEXT"
 ```
 
 ### Account closing locally
 
 ```
 cd code/close-account
+virtualenv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ACCOUNT_NAME=<the account name> ACCOUNT_EMAIL=<the account email> python index.py
 ```
