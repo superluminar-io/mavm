@@ -926,7 +926,7 @@ async function createCrossAccountRole(page, PRINCIPAL) {
   await page.click('#CAPABILITY_NAMED_IAM-checkbox-control_0')
 
   // deploy stack
-  await page.click('#console-app > div > div > div > div > div > main > div > div.awsui_content-wrapper_lm6vo_xtmft_233.awsui_content-wrapper_zycdx_s6r07_93 > div > div > form > div > div.awsui_footer_1i0s3_19emo_116 > div > div > div > div:nth-child(3) > button');
+  await page.click('[data-testid="create-stack-button"]');
 
   // wait, TODO: figure out a better way
   await page.waitForTimeout(30000);
