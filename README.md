@@ -44,10 +44,6 @@ The response is a JSON:
 1. The Step Function synchronously triggers a CodeBuild project (with lots of retries).
 1. The CodeBuild project runs a Puppeteer script which logs in into the AWS console, optionally solves a captcha via 2captcha (no audio captcha available here), enables tax inheritance (to enable one bill per AWS organization), and closes the account. The account is marked as deleted in the DynamoDB database.
 
-## Installation
-
-TODO
-
 ### Account creation locally (with debugging)
 - this will use the pre-installed MAVN
 - and start the flow in a chromium browser
@@ -110,6 +106,10 @@ source venv/bin/activate
 pip install -r requirements.txt
 ACCOUNT_NAME=<the account name> ACCOUNT_EMAIL=<the account email> python index.py
 ```
+
+## AWS Deployment
+
+    scripts/deploy
 
 ## Caveats and known issues
 
