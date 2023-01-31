@@ -30,6 +30,7 @@ import * as path from "path";
 import {AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId} from "aws-cdk-lib/custom-resources";
 import {Bucket} from 'aws-cdk-lib/aws-s3';
 import {Artifacts} from 'aws-cdk-lib/aws-codebuild';
+import {NodejsFunction} from 'aws-cdk-lib/aws-lambda-nodejs';
 
 export class AwsOrganizationsVendingMachineStack extends Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -352,6 +353,108 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
         queueAccountDeletionFunction.addEventSource(new lambdaeventsources.DynamoEventSource(table, {
             startingPosition: lambda.StartingPosition.TRIM_HORIZON,
         }));
+
+        //
+        // CleanUp StepFunction
+        //
+        const getVendedAccountsToCleanUp = new NodejsFunction(this, 'GetVendedAccountsToCleanUpFunction', {
+            entry: 'code/get-vended-accounts-to-cleanup.ts',
+        });
+        table.grantReadData(getVendedAccountsToCleanUp);
+
+        const closeAccountCodeProject = new codebuild.Project(this, 'CloseAccountCodeProject', {
+            source: codebuild.Source.s3({
+                bucket: closeAccountCodeAsset.bucket,
+                path: closeAccountCodeAsset.s3ObjectKey,
+            }),
+            environment: {
+                buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
+            },
+            artifacts: Artifacts.s3({
+                bucket: artifactBucket,
+                packageZip: false,
+                includeBuildId: true,
+            }),
+
+        });
+        closeAccountCodeProject.role?.addToPrincipalPolicy(new iam.PolicyStatement(
+          {
+              resources: ['*'],
+              actions: ['secretsmanager:GetSecretValue', 'ssm:*Parameter*', 'sqs:*', 's3:*', 'dynamodb:*', 'sts:*', 'connect:*', 'transcribe:*'], // TODO: least privilege
+          }
+        ));
+
+        const closeRootAccountTask = new tasks.CodeBuildStartBuild(this, 'CloseRootAccount', {
+            project: closeAccountCodeProject,
+            integrationPattern: sfn.IntegrationPattern.RUN_JOB,
+            environmentVariablesOverride: {
+                ACCOUNT_NAME: {
+                    type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
+                    value: sfn.JsonPath.stringAt('$.accountName'),
+                },
+                ACCOUNT_EMAIL: {
+                    type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
+                    value: sfn.JsonPath.stringAt('$.accountEmail'),
+                },
+            },
+        });
+
+        new sfn.StateMachine(
+          this,
+          'CleanUpAccounts',
+          {
+              definition: new tasks.LambdaInvoke(this, 'GetVendedAccountsToCleanUpTask', {
+                  lambdaFunction: getVendedAccountsToCleanUp,
+                  outputPath: "$.Payload"
+              }).next(
+                new sfn.Map(this, 'MapRootAccounts', {
+                    maxConcurrency: 4, // to avoid running into rate-limits when closing accounts later in the chain
+                }).iterator(new tasks.CallAwsService(this, 'OrganizationsListAccounts', {
+                    service: 'organizations',
+                    action: 'listAccounts',
+                    credentials: {role: sfn.TaskRole.fromRoleArnJsonPath("States.Format('arn:aws:iam::{}:role/OVMCrossAccountRole', $.accountId)")},
+                    iamResources: ['*'],
+                    resultSelector: {Accounts: sfn.JsonPath.stringAt('$..Accounts[?(@.Status==ACTIVE)]')}, // to ignore already suspended accounts
+                    resultPath: sfn.JsonPath.stringAt('$.subAccounts'),
+                }).addCatch(new sfn.Pass(this, 'RootAccountIsMissingOrganization').next(closeRootAccountTask), {
+                    errors: ["Organizations.AwsOrganizationsNotInUseException"]
+                }).addCatch(new sfn.Pass(this, 'ListOrganizationsAccountsTaskFailed'), {
+                    errors: ["States.TaskFailed"]
+                })
+                  .next(new sfn.Choice(this, 'HasSubAccounts?')
+                    .when(sfn.Condition.isPresent(sfn.JsonPath.stringAt("$.subAccounts.Accounts[1]")), // to check if there are more than the root account in the array
+                      new sfn.Map(this, 'MapSubAccounts', {
+                          maxConcurrency: 1, // to avoid running into rate-limits on the close account API
+                          itemsPath: sfn.JsonPath.stringAt('$.subAccounts.Accounts'),
+                          parameters: {
+                              subAccountId: sfn.JsonPath.stringAt("$$.Map.Item.Value.Id"),
+                              rootAccountId: sfn.JsonPath.stringAt("$.accountId")
+                          },
+                      }).iterator(
+                        new sfn.Choice(this, 'SubAccountIdEqualsRootAccountId?')
+                          .when(sfn.Condition.stringEqualsJsonPath(sfn.JsonPath.stringAt('$.rootAccountId'), sfn.JsonPath.stringAt('$.subAccountId')),
+                            new sfn.Pass(this, 'SkipRootAccount')
+                          )
+                          .otherwise(new tasks.CallAwsService(this, 'OrganizationsCloseAccounts', {
+                              service: 'organizations',
+                              action: 'closeAccount',
+                              credentials: {role: sfn.TaskRole.fromRoleArnJsonPath("States.Format('arn:aws:iam::{}:role/OVMCrossAccountRole', $.rootAccountId)")},
+                              iamResources: ['*'],
+                              parameters: {
+                                  AccountId: sfn.JsonPath.stringAt("$.subAccountId")
+                              }
+                          }).addCatch(new sfn.Pass(this, 'GracefullySkipAccountClosing'), {
+                              errors: ["Organizations.TooManyRequestsException", "Organizations.AccountAlreadyClosedException"]
+                          }))
+                      ))
+                    .otherwise(closeRootAccountTask)))
+              ),
+          }
+        );
+
+        //
+        //
+        //
 
         const s3bucketForManagementAccountRootMail = new s3.Bucket(this, 'ManagementAccountRootMailBucket', {
             removalPolicy: cdk.RemovalPolicy.DESTROY,

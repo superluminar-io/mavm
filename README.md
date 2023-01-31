@@ -101,10 +101,8 @@ export FOO=$(openssl rand -hex 4) \
 
 ```
 cd code/close-account
-virtualenv venv
-source venv/bin/activate
-pip install -r requirements.txt
-ACCOUNT_NAME=<the account name> ACCOUNT_EMAIL=<the account email> python index.py
+npm i
+ACCOUNT_NAME=<the account name> ACCOUNT_EMAIL=<the account email> node code/close-account/index.js
 ```
 
 ## AWS Deployment
