@@ -633,7 +633,11 @@ async function signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
     })
     .promise();
 
-  const verificationCode = mail.match(/Verification code:\s*([\d]+)/ms)[1];
+  const match = mail.match(/Verification code:\s*([\d]+)/ms);
+  if (!match) {
+    console.log("Error while extracting verification code. See mail for details!", mail);
+  }
+  const verificationCode = match[1];
   await page.type("#otp input:first-child", verificationCode);
   await page.waitForTimeout(1000);
   await page.click("#EmailValidationVerifyOTP button:first-child");
