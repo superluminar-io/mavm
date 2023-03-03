@@ -30,11 +30,17 @@ const closeAccountHandler = async function () {
 
         await markAccountDeleted(ACCOUNT_NAME);
     } catch (e) {
-        if (e.message === "password_reset_required") {
-            console.log("Ignoring error: Cannot close account", e)
-            await markAccountFailure(ACCOUNT_NAME, e);
-        } else {
-            throw e
+        switch (e.message) {
+            case "account_closed":
+                console.log("Ignoring error: Account already closed", e)
+                await markAccountDeleted(ACCOUNT_NAME);
+                break
+            case "password_reset_required":
+                console.log("Ignoring error: Cannot close account", e)
+                await markAccountFailure(ACCOUNT_NAME, e);
+                break;
+            default:
+                throw e;
         }
     }
 
@@ -206,6 +212,18 @@ async function loginToAccount(
     await tryToSolveCaptcha(page, twocaptcha_apikey);
 
     await page.waitForTimeout(8000);
+
+    let accountClosedFromTheBillingConsole = false;
+    try {
+        // account has already been closed from the billing console
+        await page.$x("//span[contains(text(),'You closed your AWS account from the Account and Billing Console.')]")
+        accountClosedFromTheBillingConsole = true;
+    } catch (e) {
+        // all good
+    }
+    if (accountClosedFromTheBillingConsole) {
+        throw new Error("account_closed");
+    }
 }
 
 async function enableTaxInheritance(page, secretdata, account_name) {
