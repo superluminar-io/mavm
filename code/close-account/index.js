@@ -33,7 +33,7 @@ const closeAccountHandler = async function () {
         switch (e.message) {
             case "account_closed":
                 console.log("Ignoring error: Account already closed", e)
-                await markAccountDeleted(ACCOUNT_NAME);
+                await markAccountDeleted(ACCOUNT_NAME, e);
                 break
             case "password_reset_required":
                 console.log("Ignoring error: Cannot close account", e)
@@ -159,7 +159,7 @@ async function tryToSolveCaptcha(page, twocaptcha_apikey) {
         let passwordResetRequired = false;
         try {
             // further logins to this account require a password reset first
-            await page.$x("//span[@id='error_title' and contains(text(),'Password reset is required')]");
+            await page.waitForXPath("//span[@id='error_title' and contains(text(),'Password reset is required')]", {timeout: 5000});
             passwordResetRequired = true;
         } catch (e) {
             // all good
@@ -216,7 +216,7 @@ async function loginToAccount(
     let accountClosedFromTheBillingConsole = false;
     try {
         // account has already been closed from the billing console
-        await page.$x("//span[contains(text(),'You closed your AWS account from the Account and Billing Console.')]")
+        await page.waitForXPath("//span[contains(text(),'You closed your AWS account from the Account and Billing Console.')]", {timeout: 5000});
         accountClosedFromTheBillingConsole = true;
     } catch (e) {
         // all good
@@ -340,7 +340,7 @@ async function enableTaxInheritance(page, secretdata, account_name) {
 }
 
 
-async function markAccountDeleted(ACCOUNT_NAME) {
+async function markAccountDeleted(ACCOUNT_NAME, error) {
     const ddb = new AWS.DynamoDB();
     await ddb.updateItem({
         Key: {
@@ -349,8 +349,11 @@ async function markAccountDeleted(ACCOUNT_NAME) {
             }
         },
         TableName: 'account',
-        UpdateExpression: "SET deletion_date = :deletion_date, account_status = :account_status",
+        UpdateExpression: "SET error_message = :error_message, deletion_date = :deletion_date, account_status = :account_status",
         ExpressionAttributeValues: {
+            ":error_message": {
+                S: error ? error.toString() : '',
+            },
             ":deletion_date": {
                 S: new Date().toISOString()
             },
@@ -371,10 +374,13 @@ async function markAccountFailure(ACCOUNT_NAME, error) {
             }
         },
         TableName: 'account',
-        UpdateExpression: "SET error_message = :error_message, account_status = :account_status",
+        UpdateExpression: "SET error_message = :error_message, failure_date = :failure_date, account_status = :account_status",
         ExpressionAttributeValues: {
             ":error_message": {
                 S: error ? error.toString() : '',
+            },
+            ":failure_date": {
+                S: new Date().toISOString()
             },
             ":account_status": {
                 S: 'FAILED'
