@@ -417,9 +417,14 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
                     resultSelector: {Accounts: sfn.JsonPath.stringAt('$..Accounts[?(@.Status==ACTIVE)]')}, // to ignore already suspended accounts
                     resultPath: sfn.JsonPath.stringAt('$.subAccounts'),
                 }).addCatch(new sfn.Pass(this, 'RootAccountIsMissingOrganization').next(closeRootAccountTask), {
-                    errors: ["Organizations.AwsOrganizationsNotInUseException"]
-                }).addCatch(new sfn.Pass(this, 'ListOrganizationsAccountsTaskFailed'), {
-                    errors: ["States.TaskFailed"]
+                    errors: ["Organizations.AwsOrganizationsNotInUseException"],
+                    resultPath: sfn.JsonPath.stringAt("$.error")
+                }).addCatch(new sfn.Choice(this, 'IsNotAuthorizedToAssumeOVMCrossAccountRole')
+                  .when(sfn.Condition.stringMatches("$.error.Cause", "The role * is not authorized to assume the task state's role, arn:aws:iam::*:role/OVMCrossAccountRole."),
+                    closeRootAccountTask)
+                  .otherwise(new sfn.Fail(this, "UnknownFailure")), {
+                    errors: ["States.TaskFailed"],
+                    resultPath: sfn.JsonPath.stringAt("$.error")
                 })
                   .next(new sfn.Choice(this, 'HasSubAccounts?')
                     .when(sfn.Condition.isPresent(sfn.JsonPath.stringAt("$.subAccounts.Accounts[1]")), // to check if there are more than the root account in the array
