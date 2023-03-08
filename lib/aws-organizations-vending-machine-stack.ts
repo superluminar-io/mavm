@@ -284,76 +284,6 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
             integration: new httpapiint.HttpLambdaIntegration('GetAvailableAccountHandler', getAvailableAccountFunction),
         });
 
-        const closeAccountCodeAsset = new s3_assets.Asset(this, 'CloseAccountCodeAsset', {
-            path: path.join(__dirname, '../code/close-account'),
-            exclude: [
-                'node_modules',
-                '.git',
-                'cdk.out'
-            ],
-        });
-
-        const closeAccountCodeCodeBuild = new codebuild.Project(this, 'AccountDeletionProject', {
-            source: codebuild.Source.s3({
-                bucket: closeAccountCodeAsset.bucket,
-                path: closeAccountCodeAsset.s3ObjectKey,
-            }),
-        });
-        closeAccountCodeCodeBuild.role?.addToPrincipalPolicy(new iam.PolicyStatement(
-            {
-                resources: ['*'],
-                actions: ['secretsmanager:GetSecretValue', 'dynamodb:*', 'sts:AssumeRole'], // TODO: least privilege
-            }
-        ));
-
-        const accountDeletionViaCodeBuildStep = new tasks.CodeBuildStartBuild(this, 'QueueAccountDeletionViaCodeBuildStep', {
-            project: closeAccountCodeCodeBuild,
-            integrationPattern: sfn.IntegrationPattern.RUN_JOB,
-            environmentVariablesOverride: {
-                ACCOUNT_NAME: {
-                    type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
-                    value: sfn.JsonPath.stringAt('$.account_name'),
-                },
-                ACCOUNT_EMAIL: {
-                    type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
-                    value: sfn.JsonPath.stringAt('$.account_email'),
-                },
-            },
-        });
-        accountDeletionViaCodeBuildStep.addRetry({
-            maxAttempts: 99999999,
-            interval: cdk.Duration.hours(12),
-            backoffRate: 1.1,
-        });
-
-        const waitStepNew = new sfn.Wait(this, 'WaitForAccountDeletionNew', {
-            time: sfn.WaitTime.duration(cdk.Duration.days(1)) // close vended account after one day
-        });
-        const accountDeletionStateMachineNew = new sfn.StateMachine(
-            this,
-            'AccountDeletionStateMachineNew',
-            {
-                definition: waitStepNew
-                    .next(accountDeletionViaCodeBuildStep),
-            }
-        );
-
-        const queueAccountDeletionFunction = new lambda_nodejs.NodejsFunction(this, 'QueueActionDeletionFunction', {
-            entry: 'code/queue-account-deletion.ts',
-            environment: {
-                ACCOUNT_CLOSE_STATE_MACHINE_ARN: accountDeletionStateMachineNew.stateMachineArn
-            }
-        });
-        queueAccountDeletionFunction.addToRolePolicy(new iam.PolicyStatement(
-            {
-                resources: ['*'],
-                actions: ['states:*'], // TODO: least privilege
-            }
-        ));
-        queueAccountDeletionFunction.addEventSource(new lambdaeventsources.DynamoEventSource(table, {
-            startingPosition: lambda.StartingPosition.TRIM_HORIZON,
-        }));
-
         //
         // CleanUp StepFunction
         //
@@ -362,6 +292,14 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
         });
         table.grantReadData(getVendedAccountsToCleanUp);
 
+        const closeAccountCodeAsset = new s3_assets.Asset(this, 'CloseAccountCodeAsset', {
+            path: path.join(__dirname, '../code/close-account'),
+            exclude: [
+                'node_modules',
+                '.git',
+                'cdk.out'
+            ],
+        });
         const closeAccountCodeProject = new codebuild.Project(this, 'CloseAccountCodeProject', {
             source: codebuild.Source.s3({
                 bucket: closeAccountCodeAsset.bucket,
