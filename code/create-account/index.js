@@ -552,6 +552,15 @@ async function solveCaptcheHandler(
   }
 }
 
+async function removeCookieBanner(page) {
+  // remove cookie banner so that it's possible to click on the submit button later, otherwise the UI thinks the button cannot be clicked
+  await page.$eval(
+      "#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary",
+      (e) => e.click()
+  );
+  await page.waitForTimeout(5000);
+}
+
 async function signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
   lastPage = page;
 
@@ -562,11 +571,7 @@ async function signupPageOne(page, ACCOUNT_EMAIL, password, ACCOUNT_NAME) {
     path: "page-1-start.jpg",
   });
 
-  // remove cookie banner so that it's possible to click on the submit button later, otherwise the UI thinks the button cannot be clicked
-  await page.$eval(
-    "#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary",
-    (e) => e.click()
-  );
+  await removeCookieBanner(page);
 
   await page.waitForSelector('input[name="emailAddress"]:first-child');
   await page.type('input[name="emailAddress"]:first-child', ACCOUNT_EMAIL);
@@ -895,12 +900,8 @@ async function signupCreditCard(page, secretdata, queueUrl3dSecure) {
 
 async function createCrossAccountRole(page, PRINCIPAL) {
   lastPage = page
-  // remove cookie banner so that it's possible to click on the submit button later, otherwise the UI thinks the button cannot be clicked
-  await page.$eval(
-      "#awsccc-cb-buttons > button.awsccc-u-btn.awsccc-u-btn-primary",
-      (e) => e.click()
-  );
-  await page.waitForTimeout(5000);
+
+  await removeCookieBanner(page)
 
   // also remove the blue first steps wizard to make things clickable
   const $document = await getDocument(page);
