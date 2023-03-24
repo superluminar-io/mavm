@@ -40,11 +40,12 @@ exports.handler = async (event: any, context: any, callback: any) => {
         Key: {
             account_name: accountName
         },
-        UpdateExpression: "SET account_status = :new_status",
+        UpdateExpression: "SET account_status = :new_status, vending_date = :vending_date",
         ConditionExpression: "account_status = :existing_status",
         ExpressionAttributeValues: {
             ":new_status": "VENDED",
             ":existing_status": "CREATED",
+            ":vending_date": new Date().toISOString(),
         },
     }).promise();
 
