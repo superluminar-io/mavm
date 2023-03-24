@@ -353,6 +353,49 @@ export class AwsOrganizationsVendingMachineStack extends Stack {
             startingPosition: lambda.StartingPosition.TRIM_HORIZON,
         }));
 
+        // POC cleanup root accounts through organization invites
+
+        const MavmOu = 'ou-13ix-g452up84';
+        const RootAccountId = '197726340368';
+
+        const stateInvited = new sfn.Pass(this, "Invited")
+          .next(new tasks.CallAwsService(this, 'OrganizationsAcceptHandshakeOnRootAccount', {
+              service: 'organizations',
+              action: 'acceptHandshake',
+              credentials: {role: sfn.TaskRole.fromRoleArnJsonPath("States.Format('arn:aws:iam::{}:role/OVMCrossAccountRole', $.rootAccountId)")},
+              iamResources: ['*'],
+              parameters: {
+                  HandshakeId: sfn.JsonPath.stringAt("$.inviteResponse.Handshake.Id")
+              },
+              resultPath: sfn.JsonPath.stringAt('$.acceptHandshakeResponse'),
+          }));
+
+        new sfn.StateMachine(
+          this,
+          'MAVMInviteAndCleanUpAccounts',
+          {
+              definition: new tasks.CallAwsService(this, 'OrganizationInviteRootAccount', {
+                  service: 'organizations',
+                  action: 'inviteAccountToOrganization',
+                  credentials: {role: sfn.TaskRole.fromRoleArnJsonPath(`States.Format('arn:aws:iam::{}:role/OVM-invite-move-and-close-account-role', ${RootAccountId})`)},
+                  iamResources: ['*'],
+                  resultPath: sfn.JsonPath.stringAt('$.inviteResponse'),
+                  parameters: {
+                      Target: {
+                          Id: sfn.JsonPath.stringAt("$.accountEmail"),
+                          Type: 'EMAIL'
+                      },
+                      Notes: 'This is a request from MAVM to clean you up!'
+                  }
+              }).addCatch(new sfn.Pass(this, 'HandshakeAlreadyExists')
+                .next(stateInvited), {
+                  errors: ["Organizations.DuplicateHandshakeException"],
+                  resultPath: sfn.JsonPath.stringAt("$.lastError")
+              }).next(stateInvited)
+          }
+        )
+        /////
+
         const s3bucketForManagementAccountRootMail = new s3.Bucket(this, 'ManagementAccountRootMailBucket', {
             removalPolicy: cdk.RemovalPolicy.DESTROY,
             lifecycleRules: [
