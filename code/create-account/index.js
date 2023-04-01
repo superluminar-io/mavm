@@ -138,7 +138,7 @@ const signup = async function () {
   );
 
   console.log("billingInformation");
-  await billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL);
+  await billingInformation(page, secretdata, INVOICE_CURRENCY, INVOICE_EMAIL);
 
   console.log("createCrossAccountRole");
   await createCrossAccountRole(page, PRINCIPAL);
@@ -938,7 +938,7 @@ async function createCrossAccountRole(page, PRINCIPAL) {
   await page.screenshot({path: 'crossAccount2.jpg'});
 }
 
-async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
+async function billingInformation(page, secretdata, INVOICE_CURRENCY, INVOICE_EMAIL) {
   lastPage = page;
   await page.setViewport({ width: 1366, height: 2000 });
   await page.goto("https://console.aws.amazon.com/billing/home?#/account");
@@ -966,12 +966,12 @@ async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
   await page.waitForTimeout(3000);
   await page.type(
     "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(1) > div:nth-child(8) > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(1) > input",
-    "Bill Gates"
+    secretdata.billing_contact_name
   );
   await page.waitForTimeout(1000);
   await page.type(
     "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(1) > div:nth-child(8) > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(2) > input",
-    "CFO"
+    secretdata.billing_contact_title
   );
   await page.waitForTimeout(1000);
   await page.type(
@@ -981,7 +981,7 @@ async function billingInformation(page, INVOICE_CURRENCY, INVOICE_EMAIL) {
   await page.waitForTimeout(1000);
   await page.type(
     "#billing-console-root > div > div > div > div.content--2j5zk.span10--28Agl > div > div > div > div > div > div.ng-scope > div > div > div > div.animation-content.animation-fade > div:nth-child(1) > div:nth-child(8) > div > div > div:nth-child(1) > div:nth-child(3) > div:nth-child(4) > input",
-    "+1234567890"
+    secretdata.billing_contact_phone
   );
   await page.waitForTimeout(1000);
   await page.click(
