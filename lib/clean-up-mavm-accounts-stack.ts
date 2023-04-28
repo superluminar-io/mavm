@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import {aws_iam as iam, aws_stepfunctions as sfn, aws_stepfunctions_tasks as tasks, Stack} from 'aws-cdk-lib';
 import {Construct} from 'constructs';
+import {Table} from "aws-cdk-lib/aws-dynamodb";
 
 export class CleanUpMavmAccountsStack extends Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -10,6 +11,38 @@ export class CleanUpMavmAccountsStack extends Stack {
     const MavmGraveyardOu = 'ou-13ix-mzi0cplm';
     const superluminarOrgOVMRole = iam.Role.fromRoleArn(this, 'SuperluminarOrgOVMRole', 'arn:aws:iam::197726340368:role/OVM-invite-move-and-close-account-role');
     const rootOu = 'r-13ix';
+
+    const accounts = Table.fromTableName(this, 'MavmAccountsTable', 'accounts');
+
+    const markAccountAsBuried = new tasks.CallAwsService(this, 'OrganizationsMarkMAVMAccountAsBuried', {
+      service: 'dynamodb',
+      action: 'updateItem',
+      iamResources: [accounts.tableArn],
+      resultPath: sfn.JsonPath.stringAt('$.markAccountAsBuriedResponse'),
+      parameters: {
+        TableName: accounts.tableName,
+        Key: {
+          'account_name': {
+            S: sfn.JsonPath.stringAt('$.accountName')
+          }
+        },
+        UpdateExpression: {
+          S: 'SET account_status = :account_status, burial_date = :burial_date',
+        },
+        ExpressionAttributeValues: {
+          ':account_status': {
+            S: 'BURIED'
+          },
+          ':burial_date': {
+            S: sfn.JsonPath.stringAt('$$.State.EnteredTime')
+          }
+        },
+        ConditionExpression: 'attribute_not_exists(burial_date)'
+      }
+    });
+
+    // handle moved but not marked as buried
+    // handle not moved but accepted and maybe not yet in root OU -> retry?
 
     const moveAccount = new tasks.CallAwsService(this, 'OrganizationsMoveMAVMAccountToGraveyard', {
       service: 'organizations',
@@ -22,7 +55,8 @@ export class CleanUpMavmAccountsStack extends Stack {
         SourceParentId: rootOu,
         DestinationParentId: MavmGraveyardOu
       }
-    });
+    })
+      .next(markAccountAsBuried);
     const stateInvited = new sfn.Pass(this, "Invited")
       .next(new tasks.CallAwsService(this, 'OrganizationsAcceptHandshakeOnMAVMAccount', {
         service: 'organizations',
