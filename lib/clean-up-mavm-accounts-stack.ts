@@ -15,6 +15,8 @@ export class CleanUpMavmAccountsStack extends Stack {
 
         const accounts = Table.fromTableName(this, 'MavmAccountsTable', 'account');
 
+        const accountIsHosedUpTerminalState = new sfn.Pass(this, 'AccountIsHosedUp');
+
         const markAccountAsBuried = new tasks.DynamoUpdateItem(this, 'MarkAccountAsBuried', {
             key: {
                 'account_name': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.accountName'))
@@ -40,6 +42,8 @@ export class CleanUpMavmAccountsStack extends Stack {
         });
         listAccountParents.addRetry({
             errors: ['Organizations.ChildNotFoundException'],
+            interval: cdk.Duration.seconds(10),
+            maxAttempts: 10,
         });
 
         const moveAccount = new tasks.CallAwsService(this, 'OrganizationsMoveMAVMAccountToGraveyard', {
@@ -73,8 +77,7 @@ export class CleanUpMavmAccountsStack extends Stack {
                 .next(listAccountParents), {
                 errors: ['Organizations.HandshakeConstraintViolationException'],
                 resultPath: sfn.JsonPath.stringAt('$.lastError')
-            }))
-            .next(listAccountParents);
+            }).addCatch(accountIsHosedUpTerminalState, {errors: ['States.TaskFailed']}).next(listAccountParents));
 
         const getExistingHandshake = new tasks.CallAwsService(this, 'OrganizationsGetHandshakeFromMAVMAccount', {
             service: 'organizations',
@@ -85,7 +88,7 @@ export class CleanUpMavmAccountsStack extends Stack {
             resultSelector: {
                 "Handshake.$": "$.Handshakes[0]",
             }
-        });
+        }).addCatch(accountIsHosedUpTerminalState, {errors:['States.TaskFailed']});
 
         const inviteAccount = new tasks.CallAwsService(this, 'OrganizationInviteRootAccount', {
             service: 'organizations',
