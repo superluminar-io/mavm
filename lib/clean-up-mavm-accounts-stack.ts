@@ -63,6 +63,21 @@ export class CleanUpMavmAccountsStack extends Stack {
             sfn.Condition.stringEquals('$.listParentsResponse.Parents[0].Id', MavmGraveyardOu), markAccountAsBuried)
             .otherwise(moveAccount));
 
+        const acceptHandShake = new tasks.CallAwsService(this, 'OrganizationsAcceptHandshakeOnMAVMAccount', {
+            service: 'organizations',
+            action: 'acceptHandshake',
+            credentials: {role: sfn.TaskRole.fromRoleArnJsonPath("States.Format('arn:aws:iam::{}:role/OVMCrossAccountRole', $.accountId)")},
+            iamResources: ['*'],
+            parameters: {
+                HandshakeId: sfn.JsonPath.stringAt("$.inviteResponse.Handshake.Id")
+            },
+            resultPath: sfn.JsonPath.stringAt('$.acceptHandshakeResponse'),
+        }).addCatch(new sfn.Pass(this, 'HandshakeAlreadyAccepted')
+            .next(listAccountParents), {
+            errors: ['Organizations.HandshakeAlreadyInStateException'],
+            resultPath: sfn.JsonPath.stringAt('$.lastError')
+        }).addCatch(accountIsHosedUpTerminalState, {errors: ['States.TaskFailed']}).next(listAccountParents);
+
         const stateInvited = new sfn.Pass(this, "Invited")
             .next(new tasks.CallAwsService(this, 'DeleteOrganizationOnMAVMAccount', {
                 service: 'organizations',
@@ -70,24 +85,14 @@ export class CleanUpMavmAccountsStack extends Stack {
                 credentials: {role: sfn.TaskRole.fromRoleArnJsonPath("States.Format('arn:aws:iam::{}:role/OVMCrossAccountRole', $.accountId)")},
                 iamResources: ['*'],
                 resultPath: sfn.JsonPath.stringAt('$.deleteOrganizationResponse'),
-            }).addCatch(new sfn.Pass(this, 'OrganizationNotEmpty').next(accountIsHosedUpTerminalState), {
-                errors: ['Organizations.OrganizationNotEmptyException'],
+            }).addCatch(new sfn.Pass(this, 'OrganizationNotEmptyOrAccountAlreadyBroken').next(accountIsHosedUpTerminalState), {
+                errors: ['Organizations.OrganizationNotEmptyException', 'States.TaskFailed'],
                 resultPath: sfn.JsonPath.stringAt('$.lastError')
-            }))
-            .next(new tasks.CallAwsService(this, 'OrganizationsAcceptHandshakeOnMAVMAccount', {
-                service: 'organizations',
-                action: 'acceptHandshake',
-                credentials: {role: sfn.TaskRole.fromRoleArnJsonPath("States.Format('arn:aws:iam::{}:role/OVMCrossAccountRole', $.accountId)")},
-                iamResources: ['*'],
-                parameters: {
-                    HandshakeId: sfn.JsonPath.stringAt("$.inviteResponse.Handshake.Id")
-                },
-                resultPath: sfn.JsonPath.stringAt('$.acceptHandshakeResponse'),
-            }).addCatch(new sfn.Pass(this, 'HandshakeAlreadyAccepted')
-                .next(listAccountParents), {
-                errors: ['Organizations.HandshakeAlreadyInStateException'],
+            }).addCatch(new sfn.Pass(this, 'OrganizationNotInUseException').next(acceptHandShake), {
+                errors: ['Organizations.AwsOrganizationsNotInUseException'],
                 resultPath: sfn.JsonPath.stringAt('$.lastError')
-            }).addCatch(accountIsHosedUpTerminalState, {errors: ['States.TaskFailed']}).next(listAccountParents));
+            })
+            .next(acceptHandShake));
 
         const getExistingHandshake = new tasks.CallAwsService(this, 'OrganizationsGetHandshakeFromMAVMAccount', {
             service: 'organizations',
