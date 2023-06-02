@@ -64,6 +64,16 @@ export class CleanUpMavmAccountsStack extends Stack {
             .otherwise(moveAccount));
 
         const stateInvited = new sfn.Pass(this, "Invited")
+            .next(new tasks.CallAwsService(this, 'DeleteOrganizationOnMAVMAccount', {
+                service: 'organizations',
+                action: 'deleteOrganization',
+                credentials: {role: sfn.TaskRole.fromRoleArnJsonPath("States.Format('arn:aws:iam::{}:role/OVMCrossAccountRole', $.accountId)")},
+                iamResources: ['*'],
+                resultPath: sfn.JsonPath.stringAt('$.deleteOrganizationResponse'),
+            }).addCatch(new sfn.Pass(this, 'OrganizationNotEmpty').next(accountIsHosedUpTerminalState), {
+                errors: ['Organizations.OrganizationNotEmptyException'],
+                resultPath: sfn.JsonPath.stringAt('$.lastError')
+            }))
             .next(new tasks.CallAwsService(this, 'OrganizationsAcceptHandshakeOnMAVMAccount', {
                 service: 'organizations',
                 action: 'acceptHandshake',
@@ -75,7 +85,7 @@ export class CleanUpMavmAccountsStack extends Stack {
                 resultPath: sfn.JsonPath.stringAt('$.acceptHandshakeResponse'),
             }).addCatch(new sfn.Pass(this, 'HandshakeAlreadyAccepted')
                 .next(listAccountParents), {
-                errors: ['Organizations.HandshakeConstraintViolationException'],
+                errors: ['Organizations.HandshakeAlreadyInStateException'],
                 resultPath: sfn.JsonPath.stringAt('$.lastError')
             }).addCatch(accountIsHosedUpTerminalState, {errors: ['States.TaskFailed']}).next(listAccountParents));
 
@@ -122,6 +132,13 @@ export class CleanUpMavmAccountsStack extends Stack {
             resultPath: sfn.JsonPath.stringAt('$.queryResponse'),
         });
 
+        const buryAccount = inviteAccount.addCatch(new sfn.Pass(this, 'HandshakeAlreadyExists')
+            .next(getExistingHandshake)
+            .next(stateInvited), {
+            errors: ["Organizations.DuplicateHandshakeException"],
+            resultPath: sfn.JsonPath.stringAt("$.lastError")
+        }).next(stateInvited);
+
         queryAccountsToBury.next(new sfn.Map(this, 'MapAccountsToBury', {
             itemsPath: sfn.JsonPath.stringAt('$.queryResponse.Items'),
             parameters: {
@@ -130,12 +147,7 @@ export class CleanUpMavmAccountsStack extends Stack {
                 accountEmail: sfn.JsonPath.stringAt('$$.Map.Item.Value.account_email.S'),
             },
             maxConcurrency: 1,
-        }).iterator(inviteAccount.addCatch(new sfn.Pass(this, 'HandshakeAlreadyExists')
-            .next(getExistingHandshake)
-            .next(stateInvited), {
-            errors: ["Organizations.DuplicateHandshakeException"],
-            resultPath: sfn.JsonPath.stringAt("$.lastError")
-        }).next(stateInvited)));
+        }).iterator(buryAccount));
 
         // TODO, skip accounts that are somehow broken
         //States.TaskFailed in step: OrganizationsAcceptHandshakeOnMAVMAccount
@@ -146,8 +158,16 @@ export class CleanUpMavmAccountsStack extends Stack {
             this,
             'MAVMInviteAndCleanUpAccounts',
             {
-                definition: queryAccountsToBury
+                definition: queryAccountsToBury,
             }
         )
+        //
+        // new sfn.StateMachine(
+        //     this,
+        //     'MAVMInviteAndCleanUpSingleAccount',
+        //     {
+        //         definition: buryAccount,
+        //     }
+        // )
     }
 }
