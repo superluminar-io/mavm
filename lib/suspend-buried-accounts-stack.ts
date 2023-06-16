@@ -47,7 +47,6 @@ export class SuspendBuriedAccountsStack extends Stack {
       conditionExpression: 'attribute_not_exists(buried_and_close_date)',
     });
 
-    // account already close exception AccountAlreadyClosedException
     const suspendAccount = new tasks.CallAwsService(this, 'SuspendAccount', {
       service: 'organizations',
       action: 'closeAccount',
