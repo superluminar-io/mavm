@@ -15,7 +15,18 @@ export class CleanUpMavmAccountsStack extends Stack {
 
         const accounts = Table.fromTableName(this, 'MavmAccountsTable', 'account');
 
-        const accountIsHosedUpTerminalState = new sfn.Pass(this, 'AccountIsHosedUp');
+        const accountIsHosedUpTerminalState = new tasks.DynamoUpdateItem(this, 'MarkAccountAsHosedUp', {
+            key: {
+                'account_name': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.accountName'))
+            },
+            table: accounts,
+            expressionAttributeValues: {
+                ':account_status': tasks.DynamoAttributeValue.fromString('DETECTED_AS_HOSED_UP'),
+                ':hosed_up_detection_date': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
+            },
+            updateExpression: 'SET account_status = :account_status, hosed_up_detection_date = :hosed_up_detection_date',
+            conditionExpression: 'attribute_not_exists(hosed_up_detection_date)',
+        });
 
         const markAccountAsBuried = new tasks.DynamoUpdateItem(this, 'MarkAccountAsBuried', {
             key: {
