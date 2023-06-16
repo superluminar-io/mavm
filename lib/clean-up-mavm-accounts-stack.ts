@@ -15,18 +15,19 @@ export class CleanUpMavmAccountsStack extends Stack {
 
         const accounts = Table.fromTableName(this, 'MavmAccountsTable', 'account');
 
-        const accountIsHosedUpTerminalState = new tasks.DynamoUpdateItem(this, 'MarkAccountAsHosedUp', {
-            key: {
-                'account_name': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.accountName'))
-            },
-            table: accounts,
-            expressionAttributeValues: {
-                ':account_status': tasks.DynamoAttributeValue.fromString('DETECTED_AS_HOSED_UP'),
-                ':hosed_up_detection_date': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
-            },
-            updateExpression: 'SET account_status = :account_status, hosed_up_detection_date = :hosed_up_detection_date',
-            conditionExpression: 'attribute_not_exists(hosed_up_detection_date)',
-        });
+        const accountIsHosedUpTerminalState = new sfn.Pass(this, 'AccountIsHosedUp');
+        // const accountIsHosedUpTerminalState = new tasks.DynamoUpdateItem(this, 'MarkAccountAsHosedUp', {
+        //     key: {
+        //         'account_name': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.accountName'))
+        //     },
+        //     table: accounts,
+        //     expressionAttributeValues: {
+        //         ':account_status': tasks.DynamoAttributeValue.fromString('DETECTED_AS_HOSED_UP'),
+        //         ':hosed_up_detection_date': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
+        //     },
+        //     updateExpression: 'SET account_status = :account_status, hosed_up_detection_date = :hosed_up_detection_date',
+        //     conditionExpression: 'attribute_not_exists(hosed_up_detection_date)',
+        // });
 
         const markAccountAsBuried = new tasks.DynamoUpdateItem(this, 'MarkAccountAsBuried', {
             key: {
@@ -97,7 +98,7 @@ export class CleanUpMavmAccountsStack extends Stack {
                 iamResources: ['*'],
                 resultPath: sfn.JsonPath.stringAt('$.deleteOrganizationResponse'),
             }).addCatch(new sfn.Pass(this, 'OrganizationNotEmptyOrAccountAlreadyBroken').next(accountIsHosedUpTerminalState), {
-                errors: ['Organizations.OrganizationNotEmptyException', 'States.TaskFailed'],
+                errors: ['Organizations.OrganizationNotEmptyException', 'States.TaskFailed'], // Organizations.OrganizationNotEmptyException handle explicitly
                 resultPath: sfn.JsonPath.stringAt('$.lastError')
             }).addCatch(new sfn.Pass(this, 'OrganizationNotInUseException').next(acceptHandShake), {
                 errors: ['Organizations.AwsOrganizationsNotInUseException'],
@@ -163,6 +164,7 @@ export class CleanUpMavmAccountsStack extends Stack {
                 accountEmail: sfn.JsonPath.stringAt('$$.Map.Item.Value.account_email.S'),
             },
             maxConcurrency: 1,
+            resultPath: sfn.JsonPath.DISCARD
         }).iterator(buryAccount));
 
         // TODO, skip accounts that are somehow broken
