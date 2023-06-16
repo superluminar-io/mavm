@@ -65,15 +65,14 @@ export class SuspendBuriedAccountsStack extends Stack {
     }).addCatch(new sfn.Succeed(this, 'Exceeded the number of requests'), {
       errors: ['Organizations.TooManyRequestsException'],
       resultPath: sfn.JsonPath.stringAt('$.lastError'),
-    }).addCatch(new sfn.Choice(this, 'HandleCloseAccountErrorWithReason')
-        .when(sfn.Condition.stringMatches(sfn.JsonPath.stringAt('$.lastError.Reason'), 'CloseAccountRequestsLimitExceeded'),
+    }).addCatch(new sfn.Choice(this, 'HandleCloseAccountErrorWithCause')
+        .when(sfn.Condition.stringMatches(sfn.JsonPath.stringAt('$.lastError.Cause'), 'You have exceeded close account quota for the past 30 days.'),
           new sfn.Succeed(this, 'Exceeded the number of member accounts you can close concurrently.'))
-        .when(sfn.Condition.stringMatches(sfn.JsonPath.stringAt('$.lastError.Reason'), 'CloseAccountQuotaExceeded'),
-          new sfn.Succeed(this, 'Exceeded the number of member accounts you can close in a 30 day period.'))
-        .otherwise(markAccountAsSuspended), {
-      errors: ['Organizations.ConstraintViolationException'],
-      resultPath: sfn.JsonPath.stringAt('$.lastError'),
-    })
+        .otherwise(new sfn.Fail(this, 'Unexpected error while closing account')),
+      {
+        errors: ['Organizations.ConstraintViolationException'],
+        resultPath: sfn.JsonPath.stringAt('$.lastError'),
+      })
       .next(markAccountAsSuspended);
 
     suspendBuriedAccounts.next(new sfn.Map(this, 'MapBuriedAccounts', {
