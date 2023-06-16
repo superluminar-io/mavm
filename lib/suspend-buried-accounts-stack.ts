@@ -1,12 +1,12 @@
 import {
   aws_iam as iam,
   aws_stepfunctions as sfn,
-  aws_stepfunctions_tasks as tasks,
+  aws_stepfunctions_tasks as tasks, Duration,
   Stack,
   StackProps
 } from "aws-cdk-lib";
 import {Construct} from "constructs";
-import {StateMachine} from "aws-cdk-lib/aws-stepfunctions";
+import {StateMachine, WaitTime} from "aws-cdk-lib/aws-stepfunctions";
 import {Table} from "aws-cdk-lib/aws-dynamodb";
 
 
@@ -57,9 +57,13 @@ export class SuspendBuriedAccountsStack extends Stack {
         AccountId: sfn.JsonPath.stringAt('$.accountId'),
       },
       resultPath: sfn.JsonPath.stringAt('$.closeAccountResponse'),
+    }).addCatch(markAccountAsSuspended, {
+      errors: ['Organizations.AccountAlreadyClosedException'],
+      resultPath: sfn.JsonPath.stringAt('$.lastError'),
     }).addCatch(new sfn.Succeed(this, 'Exceeded the number of requests'), {
       errors: ['Organizations.TooManyRequestsException'],
-    }).addCatch(new sfn.Choice(this, 'ReasonCloseAccountRequestsLimitExceeded')
+      resultPath: sfn.JsonPath.stringAt('$.lastError'),
+    }).addCatch(new sfn.Choice(this, 'HandleCloseAccountErrorWithReason')
         .when(sfn.Condition.stringMatches(sfn.JsonPath.stringAt('$.lastError.Reason'), 'CloseAccountRequestsLimitExceeded'),
           new sfn.Succeed(this, 'Exceeded the number of member accounts you can close concurrently.'))
         .when(sfn.Condition.stringMatches(sfn.JsonPath.stringAt('$.lastError.Reason'), 'CloseAccountQuotaExceeded'),
@@ -78,7 +82,9 @@ export class SuspendBuriedAccountsStack extends Stack {
         accountEmail: sfn.JsonPath.stringAt('$$.Map.Item.Value.account_email.S'),
       },
       maxConcurrency: 1,
-    }).iterator(suspendAccount));
+    }).iterator(
+      new sfn.Wait(this, 'WaitALittle', {time: WaitTime.duration(Duration.seconds(20))}) // a rough estimate to avoid throttling
+        .next(suspendAccount)));
 
     new StateMachine(this, 'SuspendBuriedAccountsStateMachine', {
       definition: suspendBuriedAccounts,
