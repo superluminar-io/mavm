@@ -8,6 +8,8 @@ import {
 import {Construct} from "constructs";
 import {StateMachine, WaitTime} from "aws-cdk-lib/aws-stepfunctions";
 import {Table} from "aws-cdk-lib/aws-dynamodb";
+import {Rule, Schedule} from "aws-cdk-lib/aws-events";
+import {SfnStateMachine} from "aws-cdk-lib/aws-events-targets";
 
 
 export class SuspendBuriedAccountsStack extends Stack {
@@ -47,6 +49,7 @@ export class SuspendBuriedAccountsStack extends Stack {
       conditionExpression: 'attribute_not_exists(buried_and_close_date)',
     });
 
+    // See limits https://docs.aws.amazon.com/organizations/latest/APIReference/API_CloseAccount.html
     const suspendAccount = new tasks.CallAwsService(this, 'SuspendAccount', {
       service: 'organizations',
       action: 'closeAccount',
@@ -85,8 +88,12 @@ export class SuspendBuriedAccountsStack extends Stack {
       new sfn.Wait(this, 'WaitALittle', {time: WaitTime.duration(Duration.seconds(20))}) // a rough estimate to avoid throttling
         .next(suspendAccount)));
 
-    new StateMachine(this, 'SuspendBuriedAccountsStateMachine', {
+    const stateMachine = new StateMachine(this, 'SuspendBuriedAccountsStateMachine', {
       definition: suspendBuriedAccounts,
+    })
+    const rule = new Rule(this, 'SuspendBuriedAccountsRule', {
+      targets: [new SfnStateMachine(stateMachine)],
+      schedule: Schedule.rate(Duration.days(1)),
     })
   }
 }
