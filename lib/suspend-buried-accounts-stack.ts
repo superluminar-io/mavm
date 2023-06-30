@@ -66,7 +66,7 @@ export class SuspendBuriedAccountsStack extends Stack {
       errors: ['Organizations.TooManyRequestsException'],
       resultPath: sfn.JsonPath.stringAt('$.lastError'),
     }).addCatch(new sfn.Choice(this, 'HandleCloseAccountErrorWithCause')
-        .when(sfn.Condition.stringMatches(sfn.JsonPath.stringAt('$.lastError.Cause'), 'You have exceeded close account quota for the past 30 days.'),
+        .when(sfn.Condition.stringMatches(sfn.JsonPath.stringAt('$.lastError.Cause'), 'You have exceeded close account quota for the past 30 days*'),
           new sfn.Succeed(this, 'Exceeded the number of member accounts you can close concurrently.'))
         .otherwise(new sfn.Fail(this, 'Unexpected error while closing account')),
       {
