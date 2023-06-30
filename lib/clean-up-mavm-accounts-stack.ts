@@ -97,11 +97,11 @@ export class CleanUpMavmAccountsStack extends Stack {
                 credentials: {role: sfn.TaskRole.fromRoleArnJsonPath("States.Format('arn:aws:iam::{}:role/OVMCrossAccountRole', $.accountId)")},
                 iamResources: ['*'],
                 resultPath: sfn.JsonPath.stringAt('$.deleteOrganizationResponse'),
-            }).addCatch(new sfn.Pass(this, 'OrganizationNotEmptyOrAccountAlreadyBroken').next(accountIsHosedUpTerminalState), {
-                errors: ['Organizations.OrganizationNotEmptyException', 'States.TaskFailed'], // Organizations.OrganizationNotEmptyException handle explicitly
-                resultPath: sfn.JsonPath.stringAt('$.lastError')
             }).addCatch(new sfn.Pass(this, 'OrganizationNotInUseException').next(acceptHandShake), {
                 errors: ['Organizations.AwsOrganizationsNotInUseException'],
+                resultPath: sfn.JsonPath.stringAt('$.lastError')
+            }).addCatch(new sfn.Pass(this, 'OrganizationNotEmptyOrAccountAlreadyBroken').next(accountIsHosedUpTerminalState), {
+                errors: ['Organizations.OrganizationNotEmptyException', 'States.TaskFailed'], // Organizations.OrganizationNotEmptyException handle explicitly
                 resultPath: sfn.JsonPath.stringAt('$.lastError')
             })
             .next(acceptHandShake));
