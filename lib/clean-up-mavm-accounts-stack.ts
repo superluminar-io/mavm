@@ -15,19 +15,21 @@ export class CleanUpMavmAccountsStack extends Stack {
 
         const accounts = Table.fromTableName(this, 'MavmAccountsTable', 'account');
 
-        const accountIsHosedUpTerminalState = new sfn.Pass(this, 'AccountIsHosedUp');
-        // const accountIsHosedUpTerminalState = new tasks.DynamoUpdateItem(this, 'MarkAccountAsHosedUp', {
-        //     key: {
-        //         'account_name': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.accountName'))
-        //     },
-        //     table: accounts,
-        //     expressionAttributeValues: {
-        //         ':account_status': tasks.DynamoAttributeValue.fromString('DETECTED_AS_HOSED_UP'),
-        //         ':hosed_up_detection_date': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
-        //     },
-        //     updateExpression: 'SET account_status = :account_status, hosed_up_detection_date = :hosed_up_detection_date',
-        //     conditionExpression: 'attribute_not_exists(hosed_up_detection_date)',
-        // });
+        const accountIsHosedUpTerminalState = new sfn.Choice(this, 'cannot assume IAM role, account is possibly closed').when(
+            sfn.Condition.stringMatches('$.lastError.Cause', 'The role arn:aws:iam::824014778649:role/CleanUpMavmAccountsStack-MAVMInviteAndCleanUpAccou-9VMPYGWK377Z is not authorized*'),
+            new tasks.DynamoUpdateItem(this, 'MarkAccountAsInaccessible', {
+                key: {
+                    'account_name': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.accountName'))
+                },
+                table: accounts,
+                expressionAttributeValues: {
+                    ':account_status': tasks.DynamoAttributeValue.fromString('INACCESSIBLE'),
+                    ':inaccessible_date': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
+                },
+                updateExpression: 'SET account_status = :account_status, inaccessible_date = :inaccessible_date',
+                conditionExpression: 'attribute_not_exists(inaccessible_date)',
+            })
+        ).otherwise(new sfn.Pass(this, 'AccountIsHosedUp'));
 
         const markAccountAsBuried = new tasks.DynamoUpdateItem(this, 'MarkAccountAsBuried', {
             key: {
@@ -88,7 +90,10 @@ export class CleanUpMavmAccountsStack extends Stack {
             .next(listAccountParents), {
             errors: ['Organizations.HandshakeAlreadyInStateException'],
             resultPath: sfn.JsonPath.stringAt('$.lastError')
-        }).addCatch(accountIsHosedUpTerminalState, {errors: ['States.TaskFailed']}).next(listAccountParents);
+        }).addCatch(accountIsHosedUpTerminalState, {
+            errors: ['States.TaskFailed'],
+            resultPath: sfn.JsonPath.stringAt('$.lastError')}
+    ).next(listAccountParents);
 
         const stateInvited = new sfn.Pass(this, "Invited")
             .next(new tasks.CallAwsService(this, 'DeleteOrganizationOnMAVMAccount', {
@@ -115,7 +120,10 @@ export class CleanUpMavmAccountsStack extends Stack {
             resultSelector: {
                 "Handshake.$": "$.Handshakes[0]",
             }
-        }).addCatch(accountIsHosedUpTerminalState, {errors:['States.TaskFailed']});
+        }).addCatch(accountIsHosedUpTerminalState, {
+            errors:['States.TaskFailed'],
+            resultPath: sfn.JsonPath.stringAt('$.lastError')
+        });
 
         const inviteAccount = new tasks.CallAwsService(this, 'OrganizationInviteRootAccount', {
             service: 'organizations',
