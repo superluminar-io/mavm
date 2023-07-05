@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AWS_REGION=eu-west-1 yarn cdk deploy
+AWS_REGION=eu-west-1 yarn cdk deploy "$@"
